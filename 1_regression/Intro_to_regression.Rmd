@@ -2,12 +2,222 @@
 title: "Intro to Regression"
 output:
   html_document: default
-  pdf_document: default
 ---
 
 # Introduction to Regression
 
+What is a regression? At its most basic, it is a method of fitting some data, $X$ that can explain / predict some other data $Y$. Note that regressions tend to be for continuous data (discrete data is another set of methods that tend to be known as classification). 
 
+So, we want to learn how some set of features in $X$ relate to an outcome $Y$. Simple enough to start.
+
+Let’s explore how we can estimate this relationship that tends to be represented by the vector $\beta$.
+
+I will be exploring linear models in matrix notation because I tend to find it much easier and less tedious. This also allows us to then focus in it’s interpretation and implementation.
+
+However, in order for us to be on the same page when using matrix notation, we need to get the basic tedious background of matrix notation out of the way! 
+
+So let's do a quick refresh on matrices.
+
+## A (very) brief introduction to linear models in matrix form
+
+### 1. Basic Definitions
+Firstly, what is a matrix? 
+
+Well, a matrix is a rectangular array of numbers with dimensions $r \times c$.
+*   A matrix is **square** if $r = c$.
+*   A matrix is **symmetrical** if $a_{ij} = a_{ji} \quad \forall i,j$.
+
+A general matrix $X$ is represented as:
+$$
+X = \begin{bmatrix}
+a_{11} & a_{12} & \cdots & a_{1c} \\
+a_{21} & a_{22} & \cdots & a_{2c} \\
+a_{31} & a_{32} & \cdots & a_{3c} \\
+\vdots & \vdots & \ddots & \vdots \\
+a_{r1} & a_{r2} & \cdots & a_{rc}
+\end{bmatrix}
+$$
+
+### The Main Diagonal
+The main (or principal) diagonal of a square matrix (where $r=c$) is:
+$$ \text{diag}(A) = (a_{11}, a_{22}, a_{33}, \dots, a_{cc}) $$
+
+### Diagonal Matrix
+A square matrix is **diagonal** if $a_{ij} = 0 \quad \forall i \neq j$:
+
+$$
+X = \begin{bmatrix}
+a_{11} & 0 & 0 & \cdots & 0 \\
+0 & a_{22} & 0 & \cdots & 0 \\
+0 & 0 & a_{33} & \cdots & 0 \\
+\vdots & \vdots & \vdots & \ddots & \vdots \\
+0 & 0 & 0 & \cdots & a_{cc}
+\end{bmatrix}
+$$
+
+### Identity Matrix
+The above matrix is an **identity matrix**, $I_n$, if the $n \times n$ matrix diagonal has $a_{ii} = 1, \quad \forall i=1,\dots,n$.
+
+## 2. Matrix Operations
+
+### Addition and Subtraction
+To add or subtract matrices, the dimensions of each matrix must be identical.
+*   $A = B$ if $a_{ij} = b_{ij} \quad \forall i,j$
+*   $C = A + B = [a_{ij} + b_{ij}]$
+
+$$
+X = \begin{bmatrix}
+a_{11}+b_{11} & a_{12}+b_{12} & \cdots & a_{1c}+b_{1c} \\
+a_{21}+b_{21} & a_{22}+b_{22} & \cdots & a_{2c}+b_{2c} \\
+a_{31}+b_{31} & a_{32}+b_{32} & \cdots & a_{3c}+b_{3c} \\
+\vdots & \vdots & \ddots & \vdots \\
+a_{r1}+b_{r1} & a_{r2}+b_{r2} & \cdots & a_{rc}+b_{rc}
+\end{bmatrix}
+$$
+
+### Transpose
+To transpose a matrix is to flip the rows and columns. $A'$ (or $A^T$) denotes the transpose.
+*   By definition: $A = (A')'$
+*   If $A$ is $(r \times c)$, then $A'$ is $(c \times r)$.
+*   $A$ is **symmetric** if $A = A'$.
+
+### Vectors
+*   A **row vector** is a $1 \times c$ matrix.
+*   Its transpose is a **column vector** ($r \times 1$):
+$$
+x' = \begin{pmatrix} x_1 \\ x_2 \\ \vdots \\ x_r \end{pmatrix}, \quad x = (x_1, x_2, \dots, x_c)
+$$
+
+### Inner Product
+The inner product of a $1 \times k$ row vector and a $k \times 1$ column vector is defined as:
+$$
+x'\beta = (x_1, x_2, \dots, x_k) \begin{pmatrix} \beta_1 \\ \beta_2 \\ \vdots \\ \beta_k \end{pmatrix} = \sum_{j=1}^k x_j \beta_j
+$$
+
+### Matrix Decomposition
+Matrices can be viewed as rows of $k$ vectors or columns of $n$ vectors:
+$$
+X = \begin{bmatrix} a_{11} & \cdots & a_{1c} \\ \vdots & \ddots & \vdots \\ a_{r1} & \cdots & a_{rc} \end{bmatrix} = \begin{bmatrix} \mathbf{a}_1 & \mathbf{a}_2 & \cdots & \mathbf{a}_c \end{bmatrix}
+$$
+$$
+X = \begin{bmatrix} a_{11} & \cdots & a_{1c} \\ \vdots & \ddots & \vdots \\ a_{r1} & \cdots & a_{rc} \end{bmatrix} = \begin{pmatrix} \mathbf{a}^1 \\ \mathbf{a}^2 \\ \vdots \\ \mathbf{a}^r \end{pmatrix}
+$$
+
+### Multiplication
+To multiply a matrix, the number of rows in $A_{(n \times p)}$ must equal the number of columns in $B_{(p \times q)}$. The result is a matrix $C_{(n \times q)}$:
+$$
+AB = (a_{n1}, \dots, a_{np}) \begin{pmatrix} b_{1q} \\ \vdots \\ b_{pq} \end{pmatrix} = \sum_{j=1}^p a_{nj} b_{jq} = c_{nq}
+$$
+
+#### Vector Multiplication Visualization
+When multiplying a $u_{(n \times 1)}$ vector, the result depends on the order:
+
+1.  **Scalar Result ($u'u$):**
+    $$
+    u'u = (u_1, \dots, u_n) \begin{pmatrix} u_1 \\ \vdots \\ u_n \end{pmatrix} = \sum_{i=1}^n u_i^2 = \text{scalar}
+    $$
+    *Note: When $u$ is a regression error term, $u'u$ is the Sum of Squared Errors (often related to MSE).*
+
+2.  **Matrix Result ($uu'$):**
+    $$
+    uu' = \begin{pmatrix} u_1 \\ \vdots \\ u_n \end{pmatrix} (u_1, \dots, u_n) = \begin{bmatrix}
+    u_1^2 & u_1 u_2 & \cdots & u_1 u_n \\
+    u_2 u_1 & u_2^2 & \cdots & u_2 u_n \\
+    \vdots & \vdots & \ddots & \vdots \\
+    u_n u_1 & u_n u_2 & \cdots & u_n^2
+    \end{bmatrix}_{n \times n}
+    $$
+    *Note: $uu'$ is the variance-covariance matrix of errors (unnormalized).*
+
+### Weighted Sum of Squares
+If $W_{(n \times n)}$ is diagonal, the product involving $u'_{(1 \times n)}$ and $u_{(n \times 1)}$ is the weighted sum of squares:
+$$
+u'Wu = (u_1, \dots, u_n) \begin{bmatrix}
+w_1 & 0 & \cdots & 0 \\
+0 & w_2 & \cdots & 0 \\
+\vdots & \vdots & \ddots & \vdots \\
+0 & 0 & \cdots & w_n
+\end{bmatrix} \begin{pmatrix} u_1 \\ \vdots \\ u_n \end{pmatrix} = \sum_{i=1}^n w_i u_i^2
+$$
+*   **OLS** estimation minimizes the unweighted MSE $u'u$.
+*   **GLS** minimizes the weighted version $u'Wu$ to improve efficiency (handling heteroskedasticity).
+
+## 3. Regression Applications
+
+### Identification
+Typically, a matrix $X$ is not square; we need $n > k$ to identify and estimate a linear regression model.
+*   The product $X'_{(k \times n)}X_{(n \times k)}$ is a **square** $k \times k$ symmetric matrix.
+*   The product $X'y$ is a $k \times 1$ column vector.
+
+### The Identity Vector
+The identity vector is a column of 1s:
+$$
+\mathbf{i}_{(n \times 1)} = \begin{pmatrix} 1 \\ 1 \\ \vdots \\ 1 \end{pmatrix}
+$$
+Properties:
+*   $\mathbf{i}'\mathbf{i} = n$
+*   $\mathbf{i}'x_{(n \times 1)} = \sum x_i$
+*   $(\mathbf{i}' \mathbf{i})^{-1}\mathbf{i}\mathbf{i}' = \begin{bmatrix} 1/n & \cdots & 1/n \\ \vdots & \ddots & \vdots \\ 1/n & \cdots & 1/n \end{bmatrix}$
+
+### Sample Mean
+The sample mean can be expressed as:
+$$
+(\mathbf{i}' \mathbf{i})^{-1}\mathbf{i}'x = \frac{1}{n}\sum x_i = \bar{x}
+$$
+
+### Centering (Demeaning) a Matrix
+Since $x = Ix$, we can center data using the **centering matrix** $M^0$:
+$$
+\begin{pmatrix} x_1 - \bar{x} \\ x_2 - \bar{x} \\ \vdots \\ x_n - \bar{x} \end{pmatrix} = [x - (\mathbf{i}' \mathbf{i})^{-1} \mathbf{i} \mathbf{i}' x] = [I - (\mathbf{i}' \mathbf{i})^{-1} \mathbf{i} \mathbf{i}']x = M^0x
+$$
+Where $M^0$ is:
+$$
+M^0 = I - (\mathbf{i}' \mathbf{i})^{-1}\mathbf{i}\mathbf{i}' = \begin{bmatrix}
+1-1/n & -1/n & \cdots & -1/n \\
+-1/n & 1-1/n & \cdots & -1/n \\
+\vdots & \vdots & \ddots & \vdots \\
+-1/n & -1/n & \cdots & 1-1/n
+\end{bmatrix}
+$$
+$M^0$ is **symmetric** and **idempotent** ($M^0 M^0 = M^0$).
+
+#### Sum of Squared Deviations
+Using $M^0$, we can express the sum of squared deviations:
+$$
+\sum_{i=1}^n (x_i - \bar{x})^2 = (M^0 x)'(M^0 x) = x'M^{0'}M^0x = x'M^0x
+$$
+Similarly for covariance:
+$$
+\sum_{i=1}^n (x_i - \bar{x})(y_i - \bar{y}) = x'M^0y
+$$
+
+## 4. Inverse Matrices
+
+### Definition
+For a scalar $a$, the inverse is $a^{-1} = 1/a$ such that $a \times a^{-1} = 1$ (if $a \neq 0$).
+For a $k \times k$ matrix $A$, the inverse $A^{-1}$ exists if and only if $A^{-1}A = I_k$ and $AA^{-1} = I_k$.
+
+**Conditions:**
+*   $A$ is **invertible** $\iff |A| \neq 0 \iff \text{rank}(A) = k$
+*   $A$ is **singular** $\iff |A| = 0 \iff \text{rank}(A) < k$
+*(Where $|A|$ is the determinant and $\text{rank}(A)$ is the matrix rank).*
+
+### Solving for $\beta$ (OLS Estimator)
+We solve for $\beta$ by multiplying $(X'X)^{-1}$ to both sides of the normal equation $X'y = X'X\hat{\beta}$:
+$$
+(X'X)^{-1} X'y = (X'X)^{-1} X'X\hat{\beta}
+$$
+$$
+\Rightarrow (X'X)^{-1} X'y = I\hat{\beta} = \hat{\beta}
+$$
+Thus, the OLS estimator is $\hat{\beta} = (X'X)^{-1} X'y$.
+
+### Properties of Inverse Matrices
+1.  If a matrix has an inverse, it is **unique**.
+2.  $(\alpha A)^{-1} = \frac{1}{\alpha}A^{-1}$ for scalar $\alpha \neq 0$ (if $A^{-1}$ exists).
+3.  $(A^{-1})^{-1} = A$.
+4.  $(A')^{-1} = (A^{-1})'$.
+5.  $(AB)^{-1} = B^{-1}A^{-1}$ (where both are square and invertible).   
 
 
 ## Tutorial Exercise
@@ -16,10 +226,10 @@ Now that we've breifly explored the background of a regression, lets do some exe
 
 Firstly, lets load in the necessary R packages we will need for these exercises.
 
-```{r}
+```{r load packages}
 rm(list = ls())
 
-library(readr) # helps us read in the janky .dta files we're using
+library(haven) # helps us read in the janky .dta files we're using
 library(dplyr) # helps manipulate data structures such as data.frames
 library(data.table) # a much better and faster data.frame
 ```
@@ -28,20 +238,20 @@ library(data.table) # a much better and faster data.frame
 
 ### #1. load data
 
-```{r}
+```{r load data 1}
 data <- read_dta("~/Projects/regression_analysis/1_regression/econmath.dta")
 data <- na.omit(data)
 ```
 
 ### #2. check the head of the table
 
-```{r}
+```{r show head data 1}
 head(data)
 ```
 
 ### #3. find the min of variable "acteng", "actmth" and "colgpa".
 
-```{r}
+```{r minimums}
 min(data$acteng)
 min(data$actmth)
 min(data$colgpa)
@@ -50,7 +260,7 @@ min(data$score)
 
 ### #4. find the max
 
-```{r}
+```{r maximums}
 max(data$acteng)
 max(data$actmth)
 max(data$colgpa)
@@ -59,7 +269,7 @@ max(data$score)
 
 ### #5. find the mean
 
-```{r}
+```{r means}
 mean(data$acteng)
 mean(data$actmth)
 mean(data$colgpa)
@@ -68,7 +278,7 @@ mean(data$score)
 
 ### #6. find the sd
 
-```{r}
+```{r standard deviations}
 sd(data$acteng)
 sd(data$actmth)
 sd(data$colgpa)
@@ -76,14 +286,16 @@ sd(data$score)
 ```
 
 ### #7. estimate the OLS model: $$score = \beta_0 + \beta_1 \cdot colgpa + \beta_2 \cdot actmth + \beta_3 \cdot acteng + u$$
-```{r}
+```{r ols1}
 OLS1 = lm(score ~ colgpa + actmth + acteng , data=data)
 
 summary(OLS1)
 ```
 
-### #8. standardize all variables and re-estimate the OLS model: $$score = \beta_0 + \beta_1 \cdot colgpa + \beta_2 \cdot actmth + \beta_3 \cdot acteng + u$$
-```{r}
+### #8. standardize all variables and re-estimate the OLS model: 
+
+$$score = \beta_0 + \beta_1 \cdot colgpa + \beta_2 \cdot actmth + \beta_3 \cdot acteng + u$$
+```{r standardised ols 1}
 
 data_st = select(data, score, colgpa, actmth, acteng )
 
@@ -101,20 +313,20 @@ summary(OLS2)
 
 ### #1. load data
 
-```{r}
-data <- read_csv("hprice1.csv")
+```{r read in data2 }
+data <- read.csv("~/Projects/regression_analysis/1_regression/hprice1.csv")
 data <- na.omit(data)
 ```
 
 ### #2. check the head of the table
 
-```{r}
+```{r head of data 2}
 head(data)
 ```
 
 ### #3. find the min of variable "price", "sqrmtr", "lotsize" and 'bdrms'.
 
-```{r}
+```{r mins}
 min(data$price)
 min(data$sqrft)
 min(data$bdrms)
@@ -122,7 +334,7 @@ min(data$bdrms)
 
 ### #4. find the max
 
-```{r}
+```{r maxs}
 max(data$price)
 max(data$sqrfg)
 max(data$bdrms)
@@ -130,7 +342,7 @@ max(data$bdrms)
 
 ### #5. find the mean
 
-```{r}
+```{r avg}
 mean(data$price)
 mean(data$sqrft)
 mean(data$bdrms)
@@ -138,21 +350,22 @@ mean(data$bdrms)
 
 ### #6. find the mean
 
-```{r}
+```{r stds}
 sd(data$price)
 sd(data$sqrft)
 sd(data$bdrms)
 ```
 
-### #7. estimate the OLS model: $$price = \beta_0 + \beta_1 \cdot sqrmtr + \beta_2 \cdot lotsize + \beta_3 \cdot bdrms + u$$
-```{r}
+### #7. estimate the OLS model: 
+$$price = \beta_0 + \beta_1 \cdot sqrmtr + \beta_2 \cdot lotsize + \beta_3 \cdot bdrms + u$$
+```{r ols models 2}
 OLS1 = lm(price ~ sqrft + bdrms , data=data)
 
 summary(OLS1)
 ```
 
 ### #8. standardize all variables and re-estimate the OLS model
-```{r}
+```{r standadised model 2}
 
 data_st = select(data, price, sqrft, bdrms)
 
@@ -166,17 +379,20 @@ summary(OLS2)
 ```
 
 ### #9. predict the value of the house
-```{r}
+```{r predictions 1}
 
-new_obs <- data.frame( sqrft = 2438, bdrms = 4)
+new_obs <- data.frame(sqrft = 2438,
+                      bdrms = 4)
 predict(OLS1, new_obs)
 
 ```
 
 ### #10. compute the prediction residual if price = 300
-```{r}
+```{r predictions 2}
+new_obs <- data.frame(price = 300, 
+                      sqrft = 2438,  
+                      bdrms = 4)
 
-new_obs <- data.frame( price = 300, sqrft = 2438,  bdrms = 4)
 300 - predict(OLS1, new_obs)
 
 ```
