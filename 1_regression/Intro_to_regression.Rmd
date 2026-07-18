@@ -1,35 +1,91 @@
 ---
 title: "Intro to Regression"
-output:
-  html_document: default
+output: 
+  html_document:
+    toc: true
+    toc_float: true
 ---
+
+<style>
+/* Table of Contents Styles */
+#TOC {
+  color: #333333;
+  font-family: 'Arial', sans-serif; 
+  font-size: 16px; 
+  border-color: #333333;
+}
+
+/* Header Styles */
+#header {
+  color: #B22222; 
+  background-color: #F9F9F9; 
+  opacity: 0.9; 
+  font-family: 'Arial', sans-serif;
+  font-size: 24px;
+  padding: 15px; 
+}
+
+/* Body Styles */
+body {
+  color: #000000; 
+  font-family: 'Arial', sans-serif;
+  background-color: #FFFFFF; 
+  line-height: 1.6; 
+}
+
+/*  Text Styles */
+pre {
+  color: #4D4D4D; 
+  background-color: #F0F8FF; 
+  border: 1px solid #B0C4DE; 
+  padding: 10px; 
+}
+
+/* Header Styles */
+h1, h2, h3 {
+  color: #003366;
+  font-family: 'Arial', sans-serif;
+}
+
+/* Link Styles */
+a {
+  color: #003366; 
+  text-decoration: none; 
+}
+
+a:hover {
+  text-decoration: underline; 
+}
+</style>
 
 # Introduction to Regression
 
-What is a regression? At its most basic, it is a method of fitting some data, $X$ that can explain / predict some other data $Y$. Note that regressions tend to be for continuous data (discrete data is another set of methods that tend to be known as classification). 
+What is a regression? At its most basic, it is a method of fitting some data, $X$ that can explain / predict some dependent data $Y$. Note that regressions tend to model data that has a continuous outcome. Discrete outcomes tend to below to another set of methods that are under the unbrella of classification problems. 
 
-So, we want to learn how some set of features in $X$ relate to an outcome $Y$. Simple enough to start.
+But for now, we want to learn *(or model)* how a set of features in $X$ relate to a continuous outcome $Y$. Simple enough to start. The canonical linear model tends to be described as: 
 
-Let’s explore how we can estimate this relationship that tends to be represented by the vector $\beta$.
+$$ Y = X\beta + u $$
 
-I will be exploring linear models in matrix notation because I tend to find it much easier and less tedious. This also allows us to then focus in it’s interpretation and implementation.
+The crucial element for the above model is the error term, $u$. This error term allows us to estimate a relationship between $Y$ and $X$. The crucial assumption behind this error term is that it is normally distirbuted i.e. $u$ ~ $N(0,\sigma^2_u)$, or in words the error term follows a normal distribution with a mean of zero and a standard deviation of $\sigma^2_u$. This assumption allows us to find a solution to the model by minimising the sum of squared residuals. 
 
-However, in order for us to be on the same page when using matrix notation, we need to get the basic tedious background of matrix notation out of the way! 
+So lets explore how we can estimate this relationship. We will represent the parameters we want to estimate with the vector $\beta$.
 
-So let's do a quick refresh on matrices.
+I will be exploring linear models in matrix notation because I tend to find it much easier and less tedious. This also allows us to then focus on it’s interpretation and implementation. However, in order for us to be on the same page when using matrix notation, we need to get the basic tedious background of matrix notation out of the way *(once that's done everything will be much neater)*! 
+
+So let's do a quick refresh on matrices *(and breifly on vectors)*.
 
 ## A (very) brief introduction to linear models in matrix form
 
-### 1. Basic Definitions
+###  what even is a matrix?
 Firstly, what is a matrix? 
 
-Well, a matrix is a rectangular array of numbers with dimensions $r \times c$.
-*   A matrix is **square** if $r = c$.
-*   A matrix is **symmetrical** if $a_{ij} = a_{ji} \quad \forall i,j$.
+Well, a matrix is a rectangular array of numbers with dimensions $r \times c$ i.e. $r$ rows and $c$ columns.
+- A matrix is **square** if $r = c$ i.e. there are the same number of row and columns.
+- A matrix is **symmetrical** if $a_{ij} = a_{ji} \ \forall i,j$ i.e. the elements in the row $i$ column $j$ is identical to the elements in row $j$ column $i$.
 
-A general matrix $X$ is represented as:
+A general matrix tends to be represented by an upcase letter such as $A$ and takes the form:
 $$
-X = \begin{bmatrix}
+A = \begin{bmatrix}
 a_{11} & a_{12} & \cdots & a_{1c} \\
 a_{21} & a_{22} & \cdots & a_{2c} \\
 a_{31} & a_{32} & \cdots & a_{3c} \\
@@ -38,15 +94,18 @@ a_{r1} & a_{r2} & \cdots & a_{rc}
 \end{bmatrix}
 $$
 
-### The Main Diagonal
-The main (or principal) diagonal of a square matrix (where $r=c$) is:
+So far so good. Nothing to complex. But now lets get some other basic concepts behind matrices under out belts.
+
+#### The  Diagonal
+The main *(or principal)* diagonal of a square matrix (where $r=c$) can be represented by:
+
 $$ \text{diag}(A) = (a_{11}, a_{22}, a_{33}, \dots, a_{cc}) $$
 
-### Diagonal Matrix
-A square matrix is **diagonal** if $a_{ij} = 0 \quad \forall i \neq j$:
+#### A Diagonal Matrix
+The diagonal itself can also be represented as a matrix and is known as a **diagonal matrix** if $a_{ij} = 0 \quad \forall i \neq j$ i.e. all elements where $i \neq j$ are zero. For example:
 
 $$
-X = \begin{bmatrix}
+A = \begin{bmatrix}
 a_{11} & 0 & 0 & \cdots & 0 \\
 0 & a_{22} & 0 & \cdots & 0 \\
 0 & 0 & a_{33} & \cdots & 0 \\
@@ -55,18 +114,21 @@ a_{11} & 0 & 0 & \cdots & 0 \\
 \end{bmatrix}
 $$
 
-### Identity Matrix
-The above matrix is an **identity matrix**, $I_n$, if the $n \times n$ matrix diagonal has $a_{ii} = 1, \quad \forall i=1,\dots,n$.
+#### Identity Matrix
+The above matrix is an **identity matrix**, $I_n$, if the $n \times n$ matrix diagonal has $a_{ij} = 1, \ \forall i=j$ i.e. all the diagonal elements are equal to one
 
-## 2. Matrix Operations
+### Matrix Operations
+Cool we've got the very basics for matrices under our belts! Now lets see how we can use matrices to make some *(linear)* transformations!
 
-### Addition and Subtraction
+#### Addition and Subtraction
 To add or subtract matrices, the dimensions of each matrix must be identical.
-*   $A = B$ if $a_{ij} = b_{ij} \quad \forall i,j$
-*   $C = A + B = [a_{ij} + b_{ij}]$
+-   $A = B$ if $a_{ij} = b_{ij} \quad \forall i,j$
+-   $C = A + B = [a_{ij} + b_{ij}]$
+
+So say you want to add two matrices together, the elements will add together corrsepondingly as such:
 
 $$
-X = \begin{bmatrix}
+C = A + B = \begin{bmatrix}
 a_{11}+b_{11} & a_{12}+b_{12} & \cdots & a_{1c}+b_{1c} \\
 a_{21}+b_{21} & a_{22}+b_{22} & \cdots & a_{2c}+b_{2c} \\
 a_{31}+b_{31} & a_{32}+b_{32} & \cdots & a_{3c}+b_{3c} \\
@@ -75,50 +137,107 @@ a_{r1}+b_{r1} & a_{r2}+b_{r2} & \cdots & a_{rc}+b_{rc}
 \end{bmatrix}
 $$
 
-### Transpose
-To transpose a matrix is to flip the rows and columns. $A'$ (or $A^T$) denotes the transpose.
-*   By definition: $A = (A')'$
-*   If $A$ is $(r \times c)$, then $A'$ is $(c \times r)$.
-*   $A$ is **symmetric** if $A = A'$.
+Okay not to bad, just summing across the columns. nice.
 
-### Vectors
-*   A **row vector** is a $1 \times c$ matrix.
-*   Its transpose is a **column vector** ($r \times 1$):
+#### Transpose
+Another really handy operation is transposition. To transpose a matrix is to flip the rows and columns. This becomes really helpful when we want to solve systems of equations. For a matrix $A$, the convention is to denote the transpose as  $A'$ or $A^T$.
+- By definition: $A = (A')'$ i.e. a matrix transposed twice is itself.
+- If $A$ is $(r \times c)$, then $A'$ is $(c \times r)$ i.e. the rows and columns are flipped.
+- $A$ is **symmetric** if $A = A'$ i.e. flipping the rows and columns doesn't change the matrix. 
+
+#### Vectors
+Now vectors are really helpful because they're basically small matrices. If you've ever done linear algebra, firstly why are you reading this? But, secondly you'll know they are the basis of linear algebra! 
+
+For our purposes, it's probably most helpful to imagine a vector as either:
+- A **row vector** is a $1 \times c$ matrix; or,
+- A **column vector** ($r \times 1$).
+
+Below is an example of a row and column vector respectively:
+
 $$
-x' = \begin{pmatrix} x_1 \\ x_2 \\ \vdots \\ x_r \end{pmatrix}, \quad x = (x_1, x_2, \dots, x_c)
+\quad x = (x_1, x_2, \dots, x_c), \quad x' = \begin{pmatrix} x_1 \\ x_2 \\ \vdots \\ x_r \end{pmatrix}
 $$
 
-### Inner Product
-The inner product of a $1 \times k$ row vector and a $k \times 1$ column vector is defined as:
+For our purposes it can kind of helpful to think of a vector as a single dimension list that contains a set amount of elements, for example a list of parameters in a linear model i.e. $\beta$.
+
+#### Inner Product
+Taking the inner product of two vectors results in a scalar i.e. a $1 \times 1$ matrix. The inner product of a $1 \times k$ row vector and a $k \times 1$ column vector is defined as:
+
 $$
 x'\beta = (x_1, x_2, \dots, x_k) \begin{pmatrix} \beta_1 \\ \beta_2 \\ \vdots \\ \beta_k \end{pmatrix} = \sum_{j=1}^k x_j \beta_j
 $$
 
-### Matrix Decomposition
-Matrices can be viewed as rows of $k$ vectors or columns of $n$ vectors:
+Note that they have to be of the same length in order to take an inner product.
+
+#### Matrix Decomposition
+As we explored above, matrices can be viewed as rows of $k$ vectors or columns of $n$ vectors. This means we can actually represent matrices as vectors, where each element inside the vector is itself a vector. This becomes really handy when simplifying notation of large matrices. 
+
+For example, we can represent a square matrix as a row vector that contains column vectors:
 $$
-X = \begin{bmatrix} a_{11} & \cdots & a_{1c} \\ \vdots & \ddots & \vdots \\ a_{r1} & \cdots & a_{rc} \end{bmatrix} = \begin{bmatrix} \mathbf{a}_1 & \mathbf{a}_2 & \cdots & \mathbf{a}_c \end{bmatrix}
-$$
-$$
-X = \begin{bmatrix} a_{11} & \cdots & a_{1c} \\ \vdots & \ddots & \vdots \\ a_{r1} & \cdots & a_{rc} \end{bmatrix} = \begin{pmatrix} \mathbf{a}^1 \\ \mathbf{a}^2 \\ \vdots \\ \mathbf{a}^r \end{pmatrix}
+A = \begin{bmatrix} a_{11} & \cdots & a_{1c} \\ \vdots & \ddots & \vdots \\ a_{r1} & \cdots & a_{rc} \end{bmatrix} = \begin{bmatrix} \mathbf{a}_1 & \mathbf{a}_2 & \cdots & \mathbf{a}_c \end{bmatrix}
 $$
 
-### Multiplication
-To multiply a matrix, the number of rows in $A_{(n \times p)}$ must equal the number of columns in $B_{(p \times q)}$. The result is a matrix $C_{(n \times q)}$:
+Or we can represent a square matrix as a column vector that contains row vectors:
 $$
-AB = (a_{n1}, \dots, a_{np}) \begin{pmatrix} b_{1q} \\ \vdots \\ b_{pq} \end{pmatrix} = \sum_{j=1}^p a_{nj} b_{jq} = c_{nq}
+A = \begin{bmatrix} a_{11} & \cdots & a_{1c} \\ \vdots & \ddots & \vdots \\ a_{r1} & \cdots & a_{rc} \end{bmatrix} = \begin{pmatrix} \mathbf{a}^1 \\ \mathbf{a}^2 \\ \vdots \\ \mathbf{a}^r \end{pmatrix}
 $$
 
-#### Vector Multiplication Visualization
-When multiplying a $u_{(n \times 1)}$ vector, the result depends on the order:
+Basically, each of these elements in the vector is a vector containing either the corresponding column or row. This becomes handy later when we look at panel data or simultaneous equation models. 
 
-1.  **Scalar Result ($u'u$):**
+#### Multiplication
+
+The big operation, multilpication. Unlike addition, multiplying matrices can get quite tedious *(good thing we have computers)*.
+
+To multiply a matrix, the number of rows in $A_{(n \times p)}$ must equal the number of columns in $B_{(p \times q)}$ i.e. the rows and columns must be of length $p$. 
+
+The result is a matrix $C_{(n \times q)}$ *(note that the dimension of matrix $C$ is the rows of matrix $A$, $n$, and the columns of matrix $B$, $q$ i.e. $n \times q$)*. Say we have the following matrices: 
+
+$$
+A_{(n \times p)} = \begin{bmatrix}
+a_{11} & a_{12} & \cdots & a_{1p} \\
+a_{21} & a_{22} & \cdots & a_{2p} \\
+\vdots & \vdots & \ddots & \vdots \\
+a_{n1} & a_{n2} & \cdots & a_{np}
+\end{bmatrix}, \quad 
+B_{(p \times q)} = \begin{bmatrix}
+b_{11} & b_{12} & \cdots & b_{1q} \\
+b_{21} & b_{22} & \cdots & b_{2q} \\
+\vdots & \vdots & \ddots & \vdots \\
+b_{p1} & b_{p2} & \cdots & b_{pq}
+\end{bmatrix}
+$$
+
+If $C = AB$, we can calculate $C$ as:
+
+$$
+C_{(n \times q)} = \begin{bmatrix}
+a_{11}b_{11} + \cdots + a_{1p}b_{p1} & a_{11}b_{12} + \cdots + a_{1p}b_{p2} & \cdots & a_{11}b_{1q} + \cdots + a_{1p}b_{pq} \\
+a_{21}b_{11} + \cdots + a_{2p}b_{p1} & a_{21}b_{12} + \cdots + a_{2p}b_{p2} & \cdots & a_{21}b_{1q} + \cdots + a_{2p}b_{pq} \\
+\vdots & \vdots & \ddots & \vdots \\
+a_{n1}b_{11} + \cdots + a_{np}b_{p1} & a_{n1}b_{12} + \cdots + a_{np}b_{p2} & \cdots & a_{n1}b_{1q} + \cdots + a_{np}b_{pq}
+\end{bmatrix}
+$$
+
+As you might imagine from the simple example above, matrix multipliation can get out of hand really easily *(in terms of how much notation and repitition there will be)*. It might be easier to think about this as each element of $C$ being the sum of the product of all the elements from the row in $A$, and all the elements of the column in $B$.
+
+This means you can find any element of the new matrix as such: 
+
+$$
+c_{ik} = \sum_{k=1}^{p} a_{ik}b_{kj}
+$$
+
+Where $i \in 1, 2, ... n$, and $j \in 1, 2, ..., q$.
+
+Now, unlike in multiplication of scalars, with the multiplication of vectors/matrices the order matters. For example, when multiplying a $u_{(n \times 1)}$ vector by it's transpose, the result depends on the order of multiplication:
+
+- **Scalar Result ($u'u$):**
     $$
     u'u = (u_1, \dots, u_n) \begin{pmatrix} u_1 \\ \vdots \\ u_n \end{pmatrix} = \sum_{i=1}^n u_i^2 = \text{scalar}
     $$
-    *Note: When $u$ is a regression error term, $u'u$ is the Sum of Squared Errors (often related to MSE).*
 
-2.  **Matrix Result ($uu'$):**
+This is the same as the inner product of vectors we saw above. It's also helpful to note that if $u$ is a our models error term, $u'u$ is the Sum of Squared Errors. This will be really helpful in solving for $\beta$ analytically.
+
+- **Matrix Result ($uu'$):**
     $$
     uu' = \begin{pmatrix} u_1 \\ \vdots \\ u_n \end{pmatrix} (u_1, \dots, u_n) = \begin{bmatrix}
     u_1^2 & u_1 u_2 & \cdots & u_1 u_n \\
@@ -127,10 +246,11 @@ When multiplying a $u_{(n \times 1)}$ vector, the result depends on the order:
     u_n u_1 & u_n u_2 & \cdots & u_n^2
     \end{bmatrix}_{n \times n}
     $$
-    *Note: $uu'$ is the variance-covariance matrix of errors (unnormalized).*
 
-### Weighted Sum of Squares
-If $W_{(n \times n)}$ is diagonal, the product involving $u'_{(1 \times n)}$ and $u_{(n \times 1)}$ is the weighted sum of squares:
+Note that $uu'$ is the variance-covariance matrix of errors *(unnormalized)* - this is helpful in calculating the standard errors and in turn hypothesis testing.
+
+#### Weighted Sum of Squares
+Now, something that will be helpful to explore here is adding weighted matrices to the above multiplications. If $W_{(n \times n)}$ is a square diagonal matrix, its product involving $u'_{(1 \times n)}$ and $u_{(n \times 1)}$ is the weighted sum of squares:
 $$
 u'Wu = (u_1, \dots, u_n) \begin{bmatrix}
 w_1 & 0 & \cdots & 0 \\
@@ -139,34 +259,73 @@ w_1 & 0 & \cdots & 0 \\
 0 & 0 & \cdots & w_n
 \end{bmatrix} \begin{pmatrix} u_1 \\ \vdots \\ u_n \end{pmatrix} = \sum_{i=1}^n w_i u_i^2
 $$
-*   **OLS** estimation minimizes the unweighted MSE $u'u$.
-*   **GLS** minimizes the weighted version $u'Wu$ to improve efficiency (handling heteroskedasticity).
 
-## 3. Regression Applications
+This becomes quite helpful when handling data that has changing / increasing variance *(known in the biz as heteroskedasticity)*. For now, when it comes to estimating $\beta$, we can use ordinary least squares (OLS) to minimises the sum of squared residuals i.e. $u'u$. For a more general solution we can use generalised least squares minimises a weighted version of the sum of squared residuals i.e. $u'W'u$ *(and in the process can handle heteroskedasticity issues)*. OLS and GLS are identical when the matrix $W$ is an identity matrix. 
 
-### Identification
-Typically, a matrix $X$ is not square; we need $n > k$ to identify and estimate a linear regression model.
-*   The product $X'_{(k \times n)}X_{(n \times k)}$ is a **square** $k \times k$ symmetric matrix.
-*   The product $X'y$ is a $k \times 1$ column vector.
+#### Matrix Inversion
+Now the last transformation we need to be able to estimate $\beta$ is known as matrix inversion. 
 
-### The Identity Vector
-The identity vector is a column of 1s:
+For a scalar $a$, the inverse is $a^{-1} = 1/a$ such that $a \times a^{-1} = 1$ (if $a \neq 0$).
+
+For a $k \times k$ matrix $A$, the inverse $A^{-1}$ exists if and only if $A^{-1}A = I_k$ and $AA^{-1} = I_k$.
+
+**Conditions:**
+- $A$ is **invertible** $\iff |A| \neq 0 \iff \text{rank}(A) = k$
+- $A$ is **singular** $\iff |A| = 0 \iff \text{rank}(A) < k$
+
+*(Where $|A|$ is the determinant and $\text{rank}(A)$ is the matrix rank - don't worry about these concepts for now).*
+
+It might be helpful to think of inversion as an analog for the operation of division in a scalar setting. It is most certainly not the same thing, but when we multiply an inverted matrix by its original, we get the identity matrix. This makes solving linear systems really simple because it can cancel out terms on the other side of equations - similar to division in a scalar setting. This will actually be a key part of estimating $\beta$.
+
+But first, lets note down some important properties of inverse matrices:
+
+- If a matrix has an inverse, it is **unique**.
+- $(\alpha A)^{-1} = \frac{1}{\alpha}A^{-1}$ for scalar $\alpha \neq 0$ (if $A^{-1}$ exists) i.e. inversion of scalars is similar to division.
+- $(A^{-1})^{-1} = A$ i.e. applying inversion to an inverted matrix returns the original matrix.
+- $(A')^{-1} = (A^{-1})'$ .i.e transposing inside or outside the inversion is identical.
+- $(AB)^{-1} = B^{-1}A^{-1}$ (where both are square and invertible) i.e. inversion to multiplied matrices inverts both those matrices.   
+
+Now that we've well and truly covered the very basics, lets apply this to regressions themselves!
+
+### Regression Applications
+
+
+#### Identification
+
+Typically, a matrix $X$ is not square. Usually there are many more rows than columns. In fact, we need $n > k$ to identify and estimate a linear regression model i.e. we need at least as many observations as parameters, also known as degrees of freedom.
+
+However, we can use some of the transformations explored above to tidy things up a bit, notably multiplication:
+- The product $X'_{(k \times n)}X_{(n \times k)}$ is a **square** $k \times k$ symmetric matrix.
+- The product $X_{(k \times n)}'y_{(n \times 1)}$ is a $k \times 1$ column vector.
+
+These two products will be the building blocks of OLS. 
+
+#### The Identity Vector, the sample mean and centering a matrix
+Now, just like there is an identity matrix, there is also an identity vector *(a column vector of 1s)*:
+
 $$
 \mathbf{i}_{(n \times 1)} = \begin{pmatrix} 1 \\ 1 \\ \vdots \\ 1 \end{pmatrix}
 $$
-Properties:
-*   $\mathbf{i}'\mathbf{i} = n$
-*   $\mathbf{i}'x_{(n \times 1)} = \sum x_i$
-*   $(\mathbf{i}' \mathbf{i})^{-1}\mathbf{i}\mathbf{i}' = \begin{bmatrix} 1/n & \cdots & 1/n \\ \vdots & \ddots & \vdots \\ 1/n & \cdots & 1/n \end{bmatrix}$
 
-### Sample Mean
-The sample mean can be expressed as:
+Taking the inner product of the identity vector returns the length of that vector .i.e.  $\mathbf{i}'\mathbf{i} = n$.
+
+Multiplying a new vector by the identify vector acts like summinng up that vector .i.e. $\mathbf{i}'x_{(n \times 1)} = \sum x_i$.
+
+This offers a really handy way to calculate the sample mean of a vector, $x$. We can express the sample mean using the identify vector as:
+
 $$
 (\mathbf{i}' \mathbf{i})^{-1}\mathbf{i}'x = \frac{1}{n}\sum x_i = \bar{x}
 $$
 
-### Centering (Demeaning) a Matrix
-Since $x = Ix$, we can center data using the **centering matrix** $M^0$:
+#### Centering (Demeaning) a Matrix
+
+Another really handy property of the identify matrix is we can create a **centering matrix**. If we take the outer product of the vectors the result will be a matrix of $1/n$:
+
+$$
+(\mathbf{i}' \mathbf{i})^{-1}\mathbf{i}\mathbf{i}' = \begin{bmatrix} 1/n & \cdots & 1/n \\ \vdots & \ddots & \vdots \\ 1/n & \cdots & 1/n \end{bmatrix}
+$$
+
+Since $x = Ix$, we can center data using this matrix, often denoted as $M^0$:
 $$
 \begin{pmatrix} x_1 - \bar{x} \\ x_2 - \bar{x} \\ \vdots \\ x_n - \bar{x} \end{pmatrix} = [x - (\mathbf{i}' \mathbf{i})^{-1} \mathbf{i} \mathbf{i}' x] = [I - (\mathbf{i}' \mathbf{i})^{-1} \mathbf{i} \mathbf{i}']x = M^0x
 $$
@@ -179,220 +338,230 @@ M^0 = I - (\mathbf{i}' \mathbf{i})^{-1}\mathbf{i}\mathbf{i}' = \begin{bmatrix}
 -1/n & -1/n & \cdots & 1-1/n
 \end{bmatrix}
 $$
-$M^0$ is **symmetric** and **idempotent** ($M^0 M^0 = M^0$).
 
-#### Sum of Squared Deviations
-Using $M^0$, we can express the sum of squared deviations:
+$M^0$ is **symmetric** and **idempotent** ($M^0 M^0 = M^0$). This is another really handy property for a matrix to have. Once we go through panel data we will see how helpful this matrix can be at transforming our data. 
+
+#### Solving for $\beta$ *(OLS Estimator)*
+But now, we've finally got to the pointy end. Let's estimate that coefficients! Just as a reminder, we're estimating $\beta$ from the below model:
+
+$$ y = X\beta+u$$
+
+We can solve for $\beta$ by multiplying $X'$ to both sides of the equation as such:
+
+$$ X'y = X'X\hat{\beta} + X'u $$
+
+Note the $X'X$ product now makes sure the matrix is square. Now we can use the one of the properties of matrix inversion and muliplty both sides by $(X'X)^{-1}$ as such:
+
 $$
-\sum_{i=1}^n (x_i - \bar{x})^2 = (M^0 x)'(M^0 x) = x'M^{0'}M^0x = x'M^0x
-$$
-Similarly for covariance:
-$$
-\sum_{i=1}^n (x_i - \bar{x})(y_i - \bar{y}) = x'M^0y
+(X'X)^{-1} X'y = (X'X)^{-1} X'X\hat{\beta} + (X'X)^{-1}X'u
 $$
 
-## 4. Inverse Matrices
+Now you might notice that $(X'X)^{-1} X'X$ creates the identity matrix, because any matrix multiplied by its inverse is the identity matrix. Therefore, we can say:
 
-### Definition
-For a scalar $a$, the inverse is $a^{-1} = 1/a$ such that $a \times a^{-1} = 1$ (if $a \neq 0$).
-For a $k \times k$ matrix $A$, the inverse $A^{-1}$ exists if and only if $A^{-1}A = I_k$ and $AA^{-1} = I_k$.
-
-**Conditions:**
-*   $A$ is **invertible** $\iff |A| \neq 0 \iff \text{rank}(A) = k$
-*   $A$ is **singular** $\iff |A| = 0 \iff \text{rank}(A) < k$
-*(Where $|A|$ is the determinant and $\text{rank}(A)$ is the matrix rank).*
-
-### Solving for $\beta$ (OLS Estimator)
-We solve for $\beta$ by multiplying $(X'X)^{-1}$ to both sides of the normal equation $X'y = X'X\hat{\beta}$:
-$$
-(X'X)^{-1} X'y = (X'X)^{-1} X'X\hat{\beta}
-$$
 $$
 \Rightarrow (X'X)^{-1} X'y = I\hat{\beta} = \hat{\beta}
 $$
-Thus, the OLS estimator is $\hat{\beta} = (X'X)^{-1} X'y$.
+Thus, the OLS estimator is: 
 
-### Properties of Inverse Matrices
-1.  If a matrix has an inverse, it is **unique**.
-2.  $(\alpha A)^{-1} = \frac{1}{\alpha}A^{-1}$ for scalar $\alpha \neq 0$ (if $A^{-1}$ exists).
-3.  $(A^{-1})^{-1} = A$.
-4.  $(A')^{-1} = (A^{-1})'$.
-5.  $(AB)^{-1} = B^{-1}A^{-1}$ (where both are square and invertible).   
+$$ \hat{\beta} = (X'X)^{-1} X'y$$
 
+Okay we finally got there! 
+
+Note it probably looks like the $(X'X)^{-1}X'u$ has just randomly dissapeared. But if you remember all the way back at the start we have assumed that $u$ ~ $N(0,\sigma^2_u)$. So as $n \rightarrow \infty$, the value of $(X'X)^{-1}X'u$ should converge to zero. This means this term will cancel out and simply drops out of the above formula.  
+
+Now crucially this is an assumption, and it's a big one! Infact, a lot of econometrics is doing tests to ensure that this assumption is true. 
+
+For more on the derivation of OLS feel free to browse this explanation: https://www.stat.cmu.edu/~cshalizi/mreg/15/lectures/13/lecture-13.pdf.
+
+However, now that we know how to estimate a linear regression, lets do some exercises! 
 
 ## Tutorial Exercise
 
-Now that we've breifly explored the background of a regression, lets do some exercises. 
+Firstly, lets load in the necessary packages we will need for these exercises.
 
-Firstly, lets load in the necessary R packages we will need for these exercises.
+```{r load packages, message=FALSE}
+rm(list = ls()) # this will clear all items in the global environment i.e. loaded dataframes
 
-```{r load packages}
-rm(list = ls())
-
-library(haven) # helps us read in the janky .dta files we're using
 library(dplyr) # helps manipulate data structures such as data.frames
 library(data.table) # a much better and faster data.frame
+
+options(scipen = 999) # makes numbers look nicer
 ```
 
-## Question 2
+Great now lets load in some data for us to play around with. 
 
-### #1. load data
+This dataset is a very simple collection of house sales. We will try to model some prices to see which features of houses are most important in determining prices *(as well as how helpful they are at predicting house prices)*.
 
-```{r load data 1}
-data <- read_dta("~/Projects/regression_analysis/1_regression/econmath.dta")
-data <- na.omit(data)
-```
+```{r data load}
 
-### #2. check the head of the table
-
-```{r show head data 1}
-head(data)
-```
-
-### #3. find the min of variable "acteng", "actmth" and "colgpa".
-
-```{r minimums}
-min(data$acteng)
-min(data$actmth)
-min(data$colgpa)
-min(data$score)
-```
-
-### #4. find the max
-
-```{r maximums}
-max(data$acteng)
-max(data$actmth)
-max(data$colgpa)
-max(data$score)
-```
-
-### #5. find the mean
-
-```{r means}
-mean(data$acteng)
-mean(data$actmth)
-mean(data$colgpa)
-mean(data$score)
-```
-
-### #6. find the sd
-
-```{r standard deviations}
-sd(data$acteng)
-sd(data$actmth)
-sd(data$colgpa)
-sd(data$score)
-```
-
-### #7. estimate the OLS model: $$score = \beta_0 + \beta_1 \cdot colgpa + \beta_2 \cdot actmth + \beta_3 \cdot acteng + u$$
-```{r ols1}
-OLS1 = lm(score ~ colgpa + actmth + acteng , data=data)
-
-summary(OLS1)
-```
-
-### #8. standardize all variables and re-estimate the OLS model: 
-
-$$score = \beta_0 + \beta_1 \cdot colgpa + \beta_2 \cdot actmth + \beta_3 \cdot acteng + u$$
-```{r standardised ols 1}
-
-data_st = select(data, score, colgpa, actmth, acteng )
-
-data_st$score  = (data_st$score  - mean(data_st$score ))/sd(data_st$score )
-data_st$colgpa = (data_st$colgpa - mean(data_st$colgpa))/sd(data_st$colgpa)
-data_st$actmth = (data_st$actmth - mean(data_st$actmth))/sd(data_st$actmth)
-data_st$acteng = (data_st$acteng - mean(data_st$acteng))/sd(data_st$acteng)
-
-OLS2 = lm(score ~ colgpa + actmth + acteng , data=data_st)
-
-summary(OLS2)
-```
-
-## Question 3
-
-### #1. load data
-
-```{r read in data2 }
-data <- read.csv("~/Projects/regression_analysis/1_regression/hprice1.csv")
-data <- na.omit(data)
-```
-
-### #2. check the head of the table
-
-```{r head of data 2}
-head(data)
-```
-
-### #3. find the min of variable "price", "sqrmtr", "lotsize" and 'bdrms'.
-
-```{r mins}
-min(data$price)
-min(data$sqrft)
-min(data$bdrms)
-```
-
-### #4. find the max
-
-```{r maxs}
-max(data$price)
-max(data$sqrfg)
-max(data$bdrms)
-```
-
-### #5. find the mean
-
-```{r avg}
-mean(data$price)
-mean(data$sqrft)
-mean(data$bdrms)
-```
-
-### #6. find the mean
-
-```{r stds}
-sd(data$price)
-sd(data$sqrft)
-sd(data$bdrms)
-```
-
-### #7. estimate the OLS model: 
-$$price = \beta_0 + \beta_1 \cdot sqrmtr + \beta_2 \cdot lotsize + \beta_3 \cdot bdrms + u$$
-```{r ols models 2}
-OLS1 = lm(price ~ sqrft + bdrms , data=data)
-
-summary(OLS1)
-```
-
-### #8. standardize all variables and re-estimate the OLS model
-```{r standadised model 2}
-
-data_st = select(data, price, sqrft, bdrms)
-
-data_st$price = (data_st$price - mean(data_st$price))/sd(data_st$price)
-data_st$sqrft = (data_st$sqrft - mean(data_st$sqrft))/sd(data_st$sqrft)
-data_st$bdrms = (data_st$bdrms - mean(data_st$bdrms))/sd(data_st$bdrms)
-
-OLS2 = lm(price ~ sqrft + bdrms , data=data_st)
-
-summary(OLS2)
-```
-
-### #9. predict the value of the house
-```{r predictions 1}
-
-new_obs <- data.frame(sqrft = 2438,
-                      bdrms = 4)
-predict(OLS1, new_obs)
+df <- setDT(read.csv('https://raw.githubusercontent.com/Michael-Morgan-Giles/regression_analysis/refs/heads/main/data/hprice1.csv'))
 
 ```
 
-### #10. compute the prediction residual if price = 300
-```{r predictions 2}
-new_obs <- data.frame(price = 300, 
-                      sqrft = 2438,  
-                      bdrms = 4)
+We can print the columns to see what covariates we have available to use in the model.
 
-300 - predict(OLS1, new_obs)
+```{r columns}
+colnames(df)
+```
+
+
+We can also print some of the key info relating to the data frame.
+
+```{r data info}
+str(df)
+```
+
+We can also see how big the dataset is. There are 88 observations and 10 columns i.e. potential covariates we can estiamte parameters for.
+
+```{r data dimensions}
+dim(df)
+```
+
+Whilst I didn't go through why it's important, it can be helpful to quickly look at the descriptive statistics to get an idea behind the shape of your data before modelling.
+
+Whilst this is a little beyond the scope of this notebook, it is really easy to achieve in `R` For example, we can get the key summary stats by using `summary()`:
+
+```{r descriptive stats}
+summary(df)
+```
+
+We can also visualise things such as the distribution of the outcome variable.
+
+```{r histogram}
+hist(df[, price])
+```
+
+But enough messing around, let's try estimate that a model.
+
+Let's just start really simply by using the formula we derived above! This will involve creating a function that we can call again later.
+
+```{r ols func}
+ols <- function(y,X) {return(solve(t(X) %*% X) %*% (t(X) %*%y ))}
+```
+
+If you've never made a function in `R` before that might look a little confusing. But it is just the formula we saw above that takes two inputs, a vector $y$ and a matrix $X$. The `%*%` symbol is the symbol that tells `R` to multiply the matrices. 
+
+Let's put it to the test! I would guess that the number of bedrooms a house has has a strong relationship to its prices, so lets test out this theory. 
+
+I will put in the column (vector) `as.matrix(df[,price])` into the `y` argument, and the matrix `as.matrix(df[,.(bdrms, const = 1)])` into the `X` argument to estimate $\beta$ *(note I've added a vector of 1's so we estimate the intercept $\beta$ and wrapped the inputs into the `as.matrix()` function to ensure the linera algebra in the above function works correctly)*.
+
+```{r ols func test}
+ols(y = as.matrix(df[,price]), X = as.matrix(df[,.(bdrms, const = 1)]))
+```
+
+Um, okay did it work? 
+
+Well if we're to believe what that vector says, then a house with no bedrooms has a price of ~$\$72,000$ *(lol omg this dataset is old)*. For every extra bedroom the house has, we can expect the price to rise by ~$\$62,000$.
+
+Okay that generally supports my hypothesis. But how about we use some code that actually good coders *(not me)* have made. For this we can use the inbuilt `lm` function to estimate the above model and see if we get the same estimate.
+
+```{r simple ols test using lm}
+simple_mod <- lm(price ~ bdrms, data = df)
+summary(simple_mod)
+```
+
+Yay, they're the same! But you can see from the print out that there is a whole lot more helpful information included that my little function doesn't provide. 
+
+Whilst some of these are beyond the scope of this notebook, knowing how to access them from this object can be really helpful. 
+
+To get the vector of coefficients you can use:
+
+```{r vector of estimates}
+simple_mod$coefficients
+```
+
+To get the error's variance estimate you can use:
+
+```{r scale parameter}
+summary(simple_mod)$sigma^2
+```
+
+You can extract the $t$-values:
+
+```{r t stats}
+summary(simple_mod)$coefficients[,'t value']
+```
+
+You can extract the $R^2$:
+
+```{r}
+summary(simple_mod)$r.squared
+```
+
+And generally all the other interesting things stored in the model object. 
+
+For a full list check out the `R` documentation here: https://www.rdocumentation.org/packages/stats/versions/3.6.2/topics/summary.lm.
+
+But now that we've seen how to estimate a model, perhaps we should use this model to predict some house prices? 
+
+Luckly, there is a helpful inbuilt `predict` function so we don't have to code up the linear algebra ourselves!
+
+Say we want to know the price of a house with three bedrooms? Well we can calculate that below:
+
+```{r simple predictions}
+predict(simple_mod, data.frame(bdrms = 3, Intercept = 1))
 
 ```
+
+So a house with three bedrooms will cost around $\$258,000$ *(my god this dataset is really out of date)*. 
+
+This is great and all, but you will see from the $R^2$ that this model doesn't do a great job explaining all the variance in the data. So, perhaps we can make it a bit better by adding some more covariates *(and also code it up in a less janky fashion)*.
+
+```{r more complex model}
+complex_mod <- lm(price ~ assess + bdrms + sqrft + lotsize + colonial, data = df)
+
+summary(complex_mod)
+```
+
+Okay this model is starting to look a little more reasonable. The $R^2 > 0.8$ such that it's fitting the data a lot better. 
+
+Let's try use this to calculate a three bedroom house that has the average values for assess, lotsize and is not a colonial era building. 
+
+```{r complex predictions}
+predict(complex_mod, data.frame(assess = mean(df[,assess]),
+                                bdrms = 3,
+                                sqrft = mean(df[,sqrft]),
+                                lotsize = mean(df[,lotsize]),
+                                colonial = 0))
+
+```
+
+The model now suggests the price for an average 3 bedroom non-colonial house is about $\$30$K higher than the simpler model.
+
+Now that's great and all, but prediction is more the realms of data science *(and there are much better models to use than linear regression)*. 
+
+What is interesting about this output from an economic perspective is that only the assessment value of the house is a statistically significant predictor of the price (only one with a `p-value` less than 0.01). 
+
+Interestingly, it suggests that for every $\$1$ increase in the assessment price, you can only expect a rougly $\$0.90$ increase in the actual price! 
+
+Interesting. This is where a nice "trick" in a linear model can be used to estimate an elasticity between $X$ and $Y$ i.e. for a \% change in $X$ we can expect a $\beta\%$ change in $y$.
+
+Now if you're not familiar with elasticities, give the Wikipedia a read. But the basics of how to estimate an elasticity using a linear model goes like this. We have a log-log model:
+
+$$ \ln Y = \ln X \beta + u$$
+
+If we take the derivative of this model w.r.t $X$ we get *(note the chain rule application)*: 
+
+$$ \frac{\partial \ln Y}{\partial \ln X}  = \frac{\partial Y}{\partial X} \frac{1}{Y} = \frac{1}{X}\beta $$
+
+If we rearrange this, you will notice that this is the expression of an elasticity:
+
+$$ \beta = \frac{\partial Y}{\partial X} \frac{X}{Y} $$
+
+What this means is that this coefficient can be interpreted as an elasticity i.e. a 1\% change in $X$, leads to a $\beta$\% change in $Y$. 
+
+Okay, lets test this by replacing the variables in the above model with their natural log. 
+
+*(note because bedrooms and colonials are either a count of binary variable, taking their log doesn't really make to much sense, so i've just left them untransformed)*
+
+```{r calculating elasticities with log-log models}
+log_log_mod <- lm(log(price) ~ log(assess) + bdrms + log(sqrft) + log(lotsize) + colonial, data = df)
+
+summary(log_log_mod)
+```
+
+The model is now showing that prices is elastic to the assessment price i.e for a 1\% increase in the assessed price, we can expected an ~1.03\% increase in the actual price! 
+
+Again, this is the only statistically significant variable in the model. Suggesting that it is not always the features of the property that impact its price, but rather how much it's assessed value is *(damn real estate agents)*!
+
+Anyhow, this has been a very rudimentary introduction to regressions. I hope it's been helpful to you and you! 

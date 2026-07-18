@@ -1,0 +1,175 @@
+---
+title: "Panel Data Introduction"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+<style>
+/* Table of Contents Styles */
+#TOC {
+  color: #333333;
+  font-family: 'Arial', sans-serif; 
+  font-size: 16px; 
+  border-color: #333333;
+}
+
+/* Header Styles */
+#header {
+  color: #B22222; 
+  background-color: #F9F9F9; 
+  opacity: 0.9; 
+  font-family: 'Arial', sans-serif;
+  font-size: 24px;
+  padding: 15px; 
+}
+
+/* Body Styles */
+body {
+  color: #000000; 
+  font-family: 'Arial', sans-serif;
+  background-color: #FFFFFF; 
+  line-height: 1.6; 
+}
+
+/*  Text Styles */
+pre {
+  color: #4D4D4D; 
+  background-color: #F0F8FF; 
+  border: 1px solid #B0C4DE; 
+  padding: 10px; 
+}
+
+/* Header Styles */
+h1, h2, h3 {
+  color: #003366;
+  font-family: 'Arial', sans-serif;
+}
+
+/* Link Styles */
+a {
+  color: #003366; 
+  text-decoration: none; 
+}
+
+a:hover {
+  text-decoration: underline; 
+}
+</style>
+
+
+
+
+
+
+
+
+
+
+```{r load packages, message=FALSE}
+rm(list = ls()) 
+
+library(dplyr)
+library(data.table) 
+library(ggplot2)
+library(fastDummies)
+library(plm)
+
+options(scipen = 999) # makes numbers look nicer
+```
+
+Great now lets load in some data for us to play around with. 
+
+This dataset is a very simple collection of house sales. We will try to model some prices to see which features of houses are most important in determining prices *(as well as how helpful they are at predicting house prices)*.
+
+```{r data load}
+
+df <- setDT(read.csv("https://raw.githubusercontent.com/Michael-Morgan-Giles/regression_analysis/refs/heads/main/data/Co2.csv"))
+
+df[, gdp_per_cap := gdp / population]
+df[, ln_gdp_per_cap := log(gdp_per_cap)]
+df[, ln_co2_per_capita := log(co2_per_capita)]
+df[, ln_co2 := log(co2)]
+df[, ln_feed_in_tariff := log(Feed...in...Tariff + 1)]
+df[, CP := Effective.Carbon.Price..Sum.of..carbon.price.rate...proportion.of.countries.CO2.covered..]
+df[, ln_CP := log(CP + 1)]
+df[, CP_DV := Carbon_price_DV]
+
+# set up panel
+panel <- pdata.frame(df, index = c('iso_code', 'year'))
+
+```
+
+
+
+```{r formula}
+formula <- as.formula("ln_co2_per_capita ~ CP_DV + ln_gdp_per_cap + ln_feed_in_tariff + ln_CP")
+```
+
+
+```{r pooled ols}
+pols <- plm(formula, 
+            data = panel, 
+            model = "pooling")
+
+summary(pols, vcov = vcovHC(pols, type = "HC1", cluster = "group"))
+
+```
+
+
+
+```{r random effects}
+re_mod <- plm(formula, 
+            data = panel, 
+            model = "random",
+            effect = "individual")
+
+summary(re_mod, vcov = vcovHC(re_mod, type = "HC1", cluster = "group"))
+
+```
+
+
+
+```{r fixed effects}
+fe_mod <- plm(formula, 
+            data = panel, 
+            model = "within",
+            effect = "twoway")
+
+summary(fe_mod, vcov = vcovHC(fe_mod, type = "HC1", cluster = "group"))
+
+```
+
+
+
+```{r hausman test}
+phtest(fe_mod, re_mod)
+
+```
+
+
+
+
+
+```{r coefficient table, warning=FALSE}
+stargazer(pols, fe_mod, re_mod,
+          title="Model Comparisons",
+          header=FALSE, 
+          type="text",  
+          omit.table.layout="n",
+          digits=3, 
+          intercept.bottom=TRUE, 
+          dep.var.labels.include = FALSE,
+          model.numbers = FALSE,
+          dep.var.caption="Dependent variable: ln_co2_per_capita",
+          model.names=FALSE,
+          #omit.stat=c("LL","ser"),
+          column.labels=c("Pooled OLS", "FE", "RE"))
+
+```
+
+
+
+
+

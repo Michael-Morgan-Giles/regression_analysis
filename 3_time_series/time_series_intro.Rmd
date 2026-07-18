@@ -1,0 +1,212 @@
+---
+title: "Time Series Introduction"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+<style>
+/* Table of Contents Styles */
+#TOC {
+  color: #333333;
+  font-family: 'Arial', sans-serif; 
+  font-size: 16px; 
+  border-color: #333333;
+}
+
+/* Header Styles */
+#header {
+  color: #B22222; 
+  background-color: #F9F9F9; 
+  opacity: 0.9; 
+  font-family: 'Arial', sans-serif;
+  font-size: 24px;
+  padding: 15px; 
+}
+
+/* Body Styles */
+body {
+  color: #000000; 
+  font-family: 'Arial', sans-serif;
+  background-color: #FFFFFF; 
+  line-height: 1.6; 
+}
+
+/*  Text Styles */
+pre {
+  color: #4D4D4D; 
+  background-color: #F0F8FF; 
+  border: 1px solid #B0C4DE; 
+  padding: 10px; 
+}
+
+/* Header Styles */
+h1, h2, h3 {
+  color: #003366;
+  font-family: 'Arial', sans-serif;
+}
+
+/* Link Styles */
+a {
+  color: #003366; 
+  text-decoration: none; 
+}
+
+a:hover {
+  text-decoration: underline; 
+}
+</style>
+
+
+
+
+
+
+
+
+
+
+```{r load packages, message=FALSE}
+rm(list = ls()) 
+
+library(dplyr)
+library(data.table) 
+library(ggplot2)
+library(fastDummies)
+
+options(scipen = 999) # makes numbers look nicer
+```
+
+Great now lets load in some data for us to play around with. 
+
+This dataset is a very simple collection of house sales. We will try to model some prices to see which features of houses are most important in determining prices *(as well as how helpful they are at predicting house prices)*.
+
+```{r data load}
+
+df <- setDT(read.csv("https://raw.githubusercontent.com/Michael-Morgan-Giles/python-causality-handbook/refs/heads/master/causal-inference-for-the-brave-and-true/data/smoking.csv"))
+
+# filter for california
+df <-  df[california == "True"]
+
+# add binary variable for excise tax intro
+df[, excise_tax_intro :=  fifelse(after_treatment == TRUE,1,0)]
+
+df <-  df[, .(year, 
+              cigsale,
+              retprice,
+              excise_tax_intro, 
+              ln_cigsale = log(cigsale),
+              ln_retprice = log(retprice))]
+
+```
+
+
+
+
+
+```{r cigsale plt}
+df %>% 
+  ggplot(aes(x = year, y = cigsale))+
+  geom_line(color = "blue")+
+  geom_vline(xintercept = 1989)+
+  theme_classic()
+
+```
+
+```{r simple static model}
+simple_static_mod <- lm(cigsale ~ excise_tax_intro + ln_retprice, data = df) 
+
+summary(simple_static_mod)
+
+df[, simple_mod_pred := predict(simple_static_mod)]
+
+df %>% 
+  ggplot(aes(x = year))+
+  geom_line(aes(y = cigsale), color = "blue")+
+  geom_line(aes(y = simple_mod_pred), color = "orange")+
+  geom_vline(xintercept = 1989)+
+  theme_classic()
+
+
+df %>% 
+  ggplot(aes(x = cigsale, y = simple_mod_pred))+
+  geom_point(color = "blue")+
+  theme_classic()
+```
+
+```{r complex model}
+# add dummy varaibles for years
+df <- dummy_cols(df, select_columns = "year")
+
+complex_static_mod <- lm(as.formula(paste0("cigsale ~ excise_tax_intro + ln_retprice + ",  
+                           paste0("year_",as.character(levels(as.factor(df[year > 1987, year]))), sep = " ", collapse = "+"))), 
+                         data = df) 
+
+summary(complex_static_mod)
+
+df[, complex_mod_pred := predict(complex_static_mod)]
+
+df %>% 
+  ggplot(aes(x = year))+
+  geom_line(aes(y = cigsale), color = "blue")+
+  geom_line(aes(y = simple_mod_pred), color = "darkgreen")+
+  geom_line(aes(y = complex_mod_pred), color = "orange")+
+  geom_vline(xintercept = 1989)+
+  theme_classic()
+
+
+df %>% 
+  ggplot(aes(x = cigsale, y = complex_mod_pred))+
+  geom_point(color = "blue")+
+  theme_classic()
+
+```
+
+```{r data load new}
+
+df_new <- setDT(read.csv("https://raw.githubusercontent.com/Michael-Morgan-Giles/python-causality-handbook/refs/heads/master/causal-inference-for-the-brave-and-true/data/smoking.csv"))
+
+# filter for california
+df_new <-  df_new[state == 36]
+
+# add binary variable for excise tax intro
+df_new[, excise_tax_intro :=  fifelse(after_treatment == TRUE,1,0)]
+
+df_new <-  df_new[, .(year, 
+              cigsale,
+              retprice,
+              excise_tax_intro, 
+              ln_cigsale = log(cigsale),
+              ln_retprice = log(retprice))]
+
+df_new <- dummy_cols(df_new, select_columns = "year")
+
+df_new[, new_state_mod_pred := predict(complex_static_mod,
+                                       df_new[,.(excise_tax_intro,
+                                                 ln_retprice,
+                                                 year_1988,
+                                                 year_1989,
+                                                 year_1990,
+                                                 year_1991,
+                                                 year_1992,
+                                                 year_1993,
+                                                 year_1994,
+                                                 year_1995,
+                                                 year_1996,
+                                                 year_1997,
+                                                 year_1998,
+                                                 year_1999,
+                                                 year_2000)])]
+
+df_new %>% 
+  ggplot(aes(x = year))+
+  geom_line(aes(y = cigsale), color = "blue")+
+  geom_line(aes(y = new_state_mod_pred), color = "orange")+
+  geom_vline(xintercept = 1989)+
+  theme_classic()
+
+```
+
+
+

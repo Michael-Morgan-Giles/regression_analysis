@@ -1,0 +1,220 @@
+---
+title: "Simple Exploration of Optimisation"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+<style>
+/* Table of Contents Styles */
+#TOC {
+  color: #333333;
+  font-family: 'Arial', sans-serif; 
+  font-size: 16px; 
+  border-color: #333333;
+}
+
+/* Header Styles */
+#header {
+  color: #B22222; 
+  background-color: #F9F9F9; 
+  opacity: 0.9; 
+  font-family: 'Arial', sans-serif;
+  font-size: 24px;
+  padding: 15px; 
+}
+
+/* Body Styles */
+body {
+  color: #000000; 
+  font-family: 'Arial', sans-serif;
+  background-color: #FFFFFF; 
+  line-height: 1.6; 
+}
+
+/*  Text Styles */
+pre {
+  color: #4D4D4D; 
+  background-color: #F0F8FF; 
+  border: 1px solid #B0C4DE; 
+  padding: 10px; 
+}
+
+/* Header Styles */
+h1, h2, h3 {
+  color: #003366;
+  font-family: 'Arial', sans-serif;
+}
+
+/* Link Styles */
+a {
+  color: #003366; 
+  text-decoration: none; 
+}
+
+a:hover {
+  text-decoration: underline; 
+}
+</style>
+
+
+
+
+
+
+
+
+
+
+```{r load packages, message=FALSE}
+rm(list = ls()) 
+
+library(dplyr)
+library(data.table) 
+library(ggplot2)
+library(plotly)
+
+options(scipen = 999) # makes numbers look nicer
+```
+
+
+
+```{r data load}
+
+df <- setDT(read.csv("https://raw.githubusercontent.com/Michael-Morgan-Giles/regression_analysis/refs/heads/main/data/mroz9.csv"))
+
+df[is.na(lnwage), lnwage := 0]
+
+df[, sum(is.na(lnwage))]
+
+formula <- as.formula("inlf ~ nwifeinc + educ + exper + expersq + age + kidslt6 + lnwage")
+```
+
+https://www.rdocumentation.org/packages/stats/versions/3.6.2/topics/optim
+
+
+```{r baseline ols and optim}
+
+round(summary(lm(formula, data = df))$coefficients,4)
+
+negative_ll <- function(params, x, y, n){
+  b <- params[-length(params)] 
+  sd <- params[length(params)] 
+  
+  r = y - x%*%b
+  r2 <- t(r) %*% r
+  
+  return((n / 2) * log(2 * pi * sd^2) + (r2 / (2 * sd^2)))
+}
+
+X_matrix <- as.matrix(df[, .(const = 1, nwifeinc, educ, exper, expersq, age, kidslt6, lnwage)])
+y_matrix <- df$inlf
+n_params <- ncol(X_matrix)
+
+
+optim(par = c(rep(0, n_params), 1),
+      fn = negative_ll,
+      x = X_matrix,
+      y = y_matrix,
+      n = nrow(X_matrix),
+      method  = "L-BFGS-B",
+      lower = c(rep(-Inf, n_params), 1e-20),
+      upper = c(rep(Inf, n_params + 1)),
+      control = list(maxit = 10000, factr = 1e-10),
+      hessian = TRUE)
+
+```
+
+
+```{r logistic regression}
+
+summary(glm(formula = formula, family = binomial(), data = df))$coefficients
+
+logistic_nll <- function(b, y, x){
+  return(-sum(-log(1 + exp(x %*% b)) + y * x %*% b))
+}
+
+optim(par = matrix(c(rep(0, ncol(X_matrix))), ncol = 1),
+      fn = logistic_nll,
+      y = y_matrix,
+      x = X_matrix,
+      control = list(maxit = 10000, 
+                     reltol = 1e-10),
+      method = "BFGS")
+
+
+logistic_nll(b = matrix(c(rep(0, ncol(X_matrix))), ncol = 1), y = y_matrix, x = X_matrix)
+
+```
+
+
+
+
+# Numerical Optimisation
+
+```{r ssr}
+ssr_loss <- function(b,y,x){
+  return(sum((y - x%*%b)^2))
+}
+
+optim(par = c(rep(0, ncol(X_matrix))),
+      fn = ssr_loss,
+      y = y_matrix,
+      x = X_matrix,
+      method = "BFGS")
+
+```
+
+
+
+```{r himmel}
+himmel <- function(params){
+  x <- params[1]
+  y <- params[2]
+  
+  return( (x^2 + y - 11)^2 + (x + y^2 - 7)^2 )
+}
+
+himmel_res <- optim(fn = himmel,
+      par = c(0,0),
+      method = "BFGS")
+
+himmel_res$par
+```
+
+
+
+```{r 3d plot}
+himmel_plot <- function(x,y){
+  return( (x^2 + y - 11)^2 + (x + y^2 - 7)^2 )
+}
+
+x <- seq(-5, 5, length.out = 100)
+y <- seq(-5, 5, length.out = 100)
+
+grid <- expand.grid(x = x,
+            y = x)
+
+z <- matrix(himmel_plot(grid$x, grid$y), nrow = 100, ncol = 100)
+
+plot_ly(x = x,
+        y = y,
+        z = ~z,
+        type = "surface") %>% 
+  add_trace(
+  type = "scatter3d",
+  mode = "markers",
+  x = ~himmel_res$par[1],
+  y = ~himmel_res$par[2],
+  z = ~himmel(himmel_res$par),
+  marker = list(
+    size = 6,     
+    color = "red",
+    opacity = 0.8
+  ),
+  name = "Minimum point for function"
+)
+```
+
+

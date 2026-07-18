@@ -1,0 +1,189 @@
+---
+title: "Endogeneity and Instrumental Variables"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+<style>
+/* Table of Contents Styles */
+#TOC {
+  color: #333333;
+  font-family: 'Arial', sans-serif; 
+  font-size: 16px; 
+  border-color: #333333;
+}
+
+/* Header Styles */
+#header {
+  color: #B22222; 
+  background-color: #F9F9F9; 
+  opacity: 0.9; 
+  font-family: 'Arial', sans-serif;
+  font-size: 24px;
+  padding: 15px; 
+}
+
+/* Body Styles */
+body {
+  color: #000000; 
+  font-family: 'Arial', sans-serif;
+  background-color: #FFFFFF; 
+  line-height: 1.6; 
+}
+
+/*  Text Styles */
+pre {
+  color: #4D4D4D; 
+  background-color: #F0F8FF; 
+  border: 1px solid #B0C4DE; 
+  padding: 10px; 
+}
+
+/* Header Styles */
+h1, h2, h3 {
+  color: #003366;
+  font-family: 'Arial', sans-serif;
+}
+
+/* Link Styles */
+a {
+  color: #003366; 
+  text-decoration: none; 
+}
+
+a:hover {
+  text-decoration: underline; 
+}
+</style>
+
+## What is Endogeneity?
+
+
+
+
+
+
+
+```{r load packages, message=FALSE}
+rm(list = ls()) 
+
+library(dplyr)
+library(haven) # helps us read .dta files
+library(data.table) 
+library(stargazer)
+library(AER)
+library(ggplot2)
+
+options(scipen = 999) # makes numbers look nicer
+```
+
+Great now lets load in some data for us to play around with. 
+
+This dataset is a very simple collection of house sales. We will try to model some prices to see which features of houses are most important in determining prices *(as well as how helpful they are at predicting house prices)*.
+
+```{r data load}
+
+df <- setDT(read_dta("https://raw.githubusercontent.com/Michael-Morgan-Giles/regression_analysis/refs/heads/main/data//maketable4.dta"))
+## only keep base sample - only reproducing some esitmates
+df <- df[baseco == 1]
+
+df[, oth_cont := fifelse(shortnam %in% c('AUS', 'MLT', 'NZL'), 1, 0 )]
+```
+
+Below is a table describing the data. 
+| Name | Description |
+| :--- | :--- |
+| `shortnam` | 3-letter country name |
+| `africa` | Africa |
+| `latitude` | Absolute value of latitude |
+| `rich4` | Country is in neo-Europe  |
+| `avexpr` | Exp Risk |
+| `logpgp95` |  Log GDP per capita (PPP) in 1995  |
+| `logem4` |  Original Log Settler Mortality  |
+| `asia` | Asia |
+| `loghjypl` |  Log output per worker in 1988  |
+| `baseco` | =1 if part of base sample |
+| `oth_cont`| =1 if other continent | 
+
+Note that this data was downloaded from a MIT dropbox on 16/6/2026 -https://www.dropbox.com/scl/fi/3yuv9j514zuajzjfluoc1/maketable4.zip?rlkey=pq9l7bxktw1iqxe6fmoh26g79&e=1&dl=0
+
+
+```{r table 2 column 2, message=FALSE}
+t2c2_mod <- lm(logpgp95 ~ avexpr, data = df)
+
+summary(t2c2_mod)
+
+df %>% 
+  ggplot(aes(x = avexpr, y = logpgp95)) +
+  geom_point()+
+  geom_smooth(method = 'lm')+
+  theme_classic()
+```
+
+
+
+
+
+```{r table 4 Panel B column 1, message=FALSE}
+
+t4pbc1_mod <- lm(avexpr ~ logem4, data = df)
+
+summary(t4pbc1_mod)
+
+df %>% 
+  ggplot(aes(x = logem4, y = avexpr)) +
+  geom_point()+
+  geom_smooth(method = 'lm')+
+  theme_classic()
+```
+
+
+
+```{r Table 4 Panel A column 1 }
+t4pAc1_IV_mod <- ivreg(logpgp95 ~ avexpr | logem4, data = df)
+
+summary(t4pAc1_IV_mod)
+
+```
+
+
+```{r Table 4 Panel A column 7}
+t4pAc7_IV_mod <- ivreg(logpgp95 ~ avexpr + asia + africa + oth_cont | 
+                         logem4 + asia + africa + oth_cont,
+                       data = df)
+
+summary(t4pAc7_IV_mod)
+```
+
+```{r table 4 Panel B column 8}
+t4pAc8_IV_mod <- ivreg(logpgp95 ~ avexpr + lat_abst + asia + africa + oth_cont | 
+                         logem4 + lat_abst +asia + africa + oth_cont,
+                       data = df)
+
+summary(t4pAc8_IV_mod)
+```
+
+```{r stargrazer tests, warning=FALSE}
+stargazer(t2c2_mod, t4pbc1_mod, t4pAc1_IV_mod, t4pAc7_IV_mod, t4pAc8_IV_mod,
+          title = "Model Comparison",
+          header = FALSE,
+          type = "text",
+          omit.table.layout = "n",
+          digits = 4,
+          intercept.bottom = TRUE,
+          column.labels = c('Table 2 Col 2',
+                            'Table 4 Panel B Col 1',
+                            'Table 4 Panel A Col 1',
+                            'Table 4 Panel A Col 7',
+                            'Table 4 Panel A Col 8'),
+          dep.var.caption = "Log GDP per Capita 1995",
+          dep.var.labels.include = FALSE,
+          model.numbers = TRUE,
+          model.names = FALSE
+          )
+```
+
+
+

@@ -1,0 +1,210 @@
+---
+title: "Difference-in-differences Introduction"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+<style>
+/* Table of Contents Styles */
+#TOC {
+  color: #333333;
+  font-family: 'Arial', sans-serif; 
+  font-size: 16px; 
+  border-color: #333333;
+}
+
+/* Header Styles */
+#header {
+  color: #B22222; 
+  background-color: #F9F9F9; 
+  opacity: 0.9; 
+  font-family: 'Arial', sans-serif;
+  font-size: 24px;
+  padding: 15px; 
+}
+
+/* Body Styles */
+body {
+  color: #000000; 
+  font-family: 'Arial', sans-serif;
+  background-color: #FFFFFF; 
+  line-height: 1.6; 
+}
+
+/*  Text Styles */
+pre {
+  color: #4D4D4D; 
+  background-color: #F0F8FF; 
+  border: 1px solid #B0C4DE; 
+  padding: 10px; 
+}
+
+/* Header Styles */
+h1, h2, h3 {
+  color: #003366;
+  font-family: 'Arial', sans-serif;
+}
+
+/* Link Styles */
+a {
+  color: #003366; 
+  text-decoration: none; 
+}
+
+a:hover {
+  text-decoration: underline; 
+}
+</style>
+
+
+
+
+
+
+
+
+
+
+```{r load packages, message=FALSE}
+rm(list = ls()) 
+
+library(dplyr)
+library(data.table) 
+library(ggplot2)
+library(fastDummies)
+library(plm)
+
+options(scipen = 999) # makes numbers look nicer
+```
+
+
+
+```{r data load}
+
+df <- setDT(read.csv("https://raw.githubusercontent.com/Michael-Morgan-Giles/python-causality-handbook/refs/heads/master/causal-inference-for-the-brave-and-true/data/smoking.csv"))
+
+df[, treated := fifelse(california == "True", 1, 0)]
+df[, post_treat := fifelse(after_treatment == "True", 1, 0)]
+df[, treated_post_treat := treated * post_treat]
+
+
+
+```
+
+
+```{r plot grouped}
+df[california == "False"] %>% 
+  ggplot(aes(x = year, y = cigsale, color = as.factor(state)))+
+  geom_line()+
+  geom_line(data = df[california == "True"], aes(y = cigsale), color = "red")+
+  theme_classic()+
+  theme(legend.position = "blank")+
+  labs(title = "Historical Cigarette Sales Per Capita by State")+
+  geom_vline(xintercept = 1988, color = "black", type = "--")+
+  scale_color_viridis_d()
+
+```
+
+
+```{r plot even more grouped, message=FALSE}
+df[, .(mean_cigsale = mean(cigsale)), by = .(year, california)] %>% 
+  ggplot(aes(x = year, y = mean_cigsale, color = california))+
+  geom_line()+
+  theme_classic()+
+  theme(legend.position = "blank")+
+  labs(title = "Historical Cigarette Sales Per Capita by State")+
+  geom_vline(xintercept = 1988, color = "black", type = "--")+
+  geom_smooth(method = "lm", data = df[year < 1989, .(mean_cigsale = mean(cigsale)), by = .(year, california)], se = FALSE)
+
+```
+
+
+```{r manual calcs}
+
+mu_after_treat = df[treated == 1 & post_treat == 1, mean(cigsale)]
+mu_before_treat = df[treated == 1 & post_treat == 0, mean(cigsale)]
+mu_after_control = df[treated == 0 & post_treat == 1, mean(cigsale)]
+mu_before_control = df[treated == 0 & post_treat == 0, mean(cigsale)]
+
+did_manual <- (mu_after_treat - mu_before_treat) - (mu_after_control - mu_before_control)
+
+print(paste0(' The manual DiD estimator is: ', round(did_manual,2)))
+
+```
+
+
+```{r pooled ols}
+did_ols <- lm(cigsale ~ treated + post_treat + treated_post_treat, 
+            data = df)
+
+summary(did_ols, vcov = vcovHC(did_ols, cluster = "group"))
+
+```
+
+
+
+
+
+
+```{r fixed effects calcs}
+fe_mod <- plm(cigsale ~ treated_post_treat, 
+            data = df, 
+            model = "within",
+            effect = "twoway",
+            index = c("state", "year"))
+
+summary(fe_mod, vcov = vcovHC(fe_mod, type = "HC1", cluster = "group"))
+
+```
+
+
+
+```{r heterogenous}
+
+df <- dummy_cols(df, select_columns = "year")
+
+formula <- as.formula(paste0("cigsale ~ ", 
+                             paste0("treated:post_treat:year_",
+                                    as.character(levels(as.factor(df$year))),
+                                    sep = "", 
+                                    collapse = "+")))
+  
+dyn_did <- plm(formula, 
+            data = df, 
+            model = "within",
+            effect = "twoway",
+            index = c("state", "year"))
+
+summary(dyn_did, vcov = vcovHC(dyn_did, cluster = "group"))
+```
+
+
+
+
+
+```{r dynamic plot, warning=FALSE}
+
+cbind(year = df[year > 1987, year], summary(dyn_did, 
+                              vcov = vcovHC(dyn_did, 
+                                            cluster = "group"))$coefficients) %>%
+  ggplot(aes(x = year, y = Estimate))+
+  geom_line(color = "black")+
+  geom_ribbon(aes(ymin = Estimate - 2 * `Std. Error`, 
+                  ymax = Estimate + 2 * `Std. Error`), 
+              fill = "cornflowerblue", 
+              color = "black", 
+              alpha = 0.5)+
+  geom_hline(yintercept = 2, linetype = "dashed", color = "black")+
+  theme_classic()+
+  labs(title = "Heterogenous DiD Estimates",
+       y = "DiD Estimate")+
+  theme(legend.position = "top")
+
+```
+
+
+
+
+

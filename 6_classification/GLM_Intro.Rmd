@@ -1,0 +1,236 @@
+---
+title: "GLM Intro"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+<style>
+/* Table of Contents Styles */
+#TOC {
+  color: #333333;
+  font-family: 'Arial', sans-serif; 
+  font-size: 16px; 
+  border-color: #333333;
+}
+
+/* Header Styles */
+#header {
+  color: #B22222; 
+  background-color: #F9F9F9; 
+  opacity: 0.9; 
+  font-family: 'Arial', sans-serif;
+  font-size: 24px;
+  padding: 15px; 
+}
+
+/* Body Styles */
+body {
+  color: #000000; 
+  font-family: 'Arial', sans-serif;
+  background-color: #FFFFFF; 
+  line-height: 1.6; 
+}
+
+/*  Text Styles */
+pre {
+  color: #4D4D4D; 
+  background-color: #F0F8FF; 
+  border: 1px solid #B0C4DE; 
+  padding: 10px; 
+}
+
+/* Header Styles */
+h1, h2, h3 {
+  color: #003366;
+  font-family: 'Arial', sans-serif;
+}
+
+/* Link Styles */
+a {
+  color: #003366; 
+  text-decoration: none; 
+}
+
+a:hover {
+  text-decoration: underline; 
+}
+</style>
+
+
+
+
+## Probit
+
+
+## Logistic Regression
+
+
+
+```{r load packages, message=FALSE}
+rm(list = ls()) 
+
+library(dplyr)
+library(data.table) 
+library(haven)
+library(margins) # handy functions to calculate marginal effects
+library(lmtest) # helps cluster standard errors
+library(sandwich) # variance-covariance estimators
+
+options(scipen = 999) # makes numbers look nicer
+```
+
+
+
+```{r data load}
+
+df <- setDT(read_dta("https://raw.githubusercontent.com/Michael-Morgan-Giles/regression_analysis/refs/heads/main/data/lakisha_aer.dta"))
+
+df[,":=" (city_dummy = fifelse(city == "c", 1, 0),
+      white_dummy = fifelse(race == "w", 1, 0),
+      sex_dummy = fifelse(sex == "m", 1, 0),
+      hl_dummy = fifelse(h == 1, "high", "low")
+        )]
+
+cols <- c("white_dummy",
+     "h",
+     'city_dummy',
+     'sex_dummy',
+     'honors',
+     'volunteer',
+     'military', 
+     'email',
+     'empholes',
+     'workinschool', 
+     'computerskills', 
+     'specialskills',
+     'yearsexp')
+
+formula <- as.formula(paste0("call ~ ", paste0(cols, sep = " ", collapse = "+ ")))
+
+print(formula)
+
+```
+
+
+
+
+```{r recreate key stats}
+df[, .(count = .N,
+       mean_callback_rate = round(mean(call),4),
+       sd_callback_rate = round(sd(call),4)),
+       by = .(race)]
+
+```
+
+```{r recreate key stats with quality}
+dcast(df[, .(mean_callback_rate = round(mean(call), 4)),
+       by = .(race, hl_dummy)],
+      race ~ hl_dummy
+) %>% 
+  mutate(delta = high - low)
+
+```
+
+```{r t test main}
+
+t_res <- data.frame()
+
+for (c in cols[-1]){
+  t_res_temp <- t.test(df[race == 'b', ..c],
+                       df[race == 'w', ..c])
+  
+  t_res <- rbind(t_res,
+                 data.frame(covariate = c, 
+                            b = round(t_res_temp$estimate[1],4),
+                            w = round(t_res_temp$estimate[2],4),
+                            # delta = ,
+                            t_stat = round(t_res_temp$statistic,4),
+                            p_value = round(t_res_temp$p.value,4)))
+}
+
+#kableExtra::kable(t_res)
+t_res
+```
+
+
+
+```{r t test resume quality}
+
+t_res_quality <- data.frame()
+
+for (c in cols[-2]){
+  t_res_temp <- t.test(df[hl_dummy == 'high', ..c],
+                       df[hl_dummy == 'low', ..c])
+  
+  t_res_quality <- rbind(t_res_quality,
+                         data.frame(covariate = c,
+                                    high = round(t_res_temp$estimate[1],4),
+                                    low = round(t_res_temp$estimate[2],4),
+                                    # delta = ,
+                                    t_stat = round(t_res_temp$statistic,4),
+                                    p_value = round(t_res_temp$p.value,4)))
+}
+
+#kableExtra::kable(t_res_quality)
+t_res_quality
+```
+
+```{r factor}
+# reformat to factor before fitting to model (helps with magrinal effect ccalcs)
+df[,":="(white_dummy = as.factor(white_dummy),
+                                  h = as.factor(h),
+                                  city_dummy = as.factor(city_dummy),
+                                  sex_dummy = as.factor(sex_dummy),
+                                  honors = as.factor(honors),
+                                  volunteer = as.factor(volunteer),
+                                  military = as.factor(military),
+                                  email = as.factor(email),
+                                  empholes = as.factor(empholes),
+                                  workinschool = as.factor(workinschool),
+                                  computerskills = as.factor(computerskills),
+                                  specialskills = as.factor(specialskills))]
+
+```
+
+
+```{r probit}
+probit_res <- glm(formula = call ~ white_dummy + h + city_dummy + sex_dummy + honors + 
+                    volunteer + military + email + empholes + workinschool + 
+                    computerskills + specialskills + yearsexp, 
+                  family = binomial(link = "probit"), 
+                  data = df)
+
+coeftest(probit_res, vcov. = vcovCL(probit_res, cluster = ~adid))
+
+ame_probit <- margins(probit_res, 
+                      #vce = c("bootstrap"), 
+                      vcov = vcovCL(probit_res, cluster = ~adid))
+
+summary(ame_probit)
+```
+
+
+```{r logit}
+logit_res <- glm(formula = call ~ white_dummy + h + city_dummy + sex_dummy + honors + 
+                    volunteer + military + email + empholes + workinschool + 
+                    computerskills + specialskills + yearsexp, 
+                  family = binomial(link = "logit"), 
+                  data = df)
+
+# cluster at ad id level
+coeftest(logit_res, vcov. = vcovCL(logit_res, cluster = ~adid))
+
+ame_logit <- margins(logit_res, 
+                     # vce = c("bootstrap"), 
+                      vcov = vcovCL(logit_res, cluster = ~adid))
+
+summary(ame_logit)
+```
+
+
+
+
+
+
