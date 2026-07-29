@@ -60,11 +60,119 @@ a:hover {
 
 ## What is Endogeneity?
 
+Why can't we just run a regression and claim that $\hat \beta$ represents a causal effect and not just a correlation? 
+
+This is a *(if not the)* key question in econometrics. I mentioned in the previous notebook that we can ignore the error, $u$ or $\varepsilon$, when we estimate via ols because the expectation of that error will converge to zero *(because we assume $u$ ~ $N(0,\sigma^2_u)$)*. However, what happens if that term does not converge to  zero? Well the estimates of $\beta$ becomes biased. 
+
+To unpack why, it is helpful to go through an example. The cannonical example to describe this in econometrics is the unmeasured *"ability"* bias. But to avoid being ableist, let's explore another problematic example, what impact do institutions have on ecomomic growth? 
+
+On it's face an interesting question, and you might think we can just run a regression of a measure of intstitutions on GDP per capita to see if the coefficient is positive and statistically significant and then we're done. However, if you did this, how would you know this *(theoretically)* positive coefficient is because good economic institutions lead to higher growth, or because higher economic growth lead to good institutions? Which one comes first? 
+
+Well, it's uncertain because both good institutions and growth are likely a function of each other. Let's take a look at a simple example where $G$ is GDP per capita, $R$ is some measure of institutions and $X$ contains extra covariates. The relationship between these variables might be described by a system of equations like this:
+
+$$
+G = \theta_1 X + \gamma_1 R + u 
+$$
+$$
+R = \theta_2 X + \gamma_2 G + v
+$$
+
+In this system, both $G$ and $R$ are functions of each other. If $R$ is correlated to $u$ in the first regression, then that little assumption we had when estimating $\beta$ via OLS means that the relationship between $R$ and $u$, will not converge to zero i.e. $Cov(u|X,R) \neq 0$. 
+
+This might not seem very intutative at first. So lets show what this bias will look like by decomposing the OLS estimator. Say we simpify the above system of equations into matrix form where the outcome variables are in $Y=[G',R']$, $\beta$ is a matrix containing all the coefficients $(\theta_i ,  \gamma_i  \forall i )$, $K$ is a square matrix containing all covarites $[[X',R'],[X',G']]$ and the errors are in $\varepsilon = [u',v']$. We get this equation *(hopefully that looks familiar)*:
+
+$$ Y = \beta K  + \varepsilon$$
+
+Say we try to estimate each of these equations, we know we can calculate the $\beta$ as such:
+
+$$ \hat \beta = (K' K)^{-1} K'Y$$
+
+At this point we can substitute the initial equation back in to $Y$ as such:
+
+$$ \hat \beta = (K' K)^{-1}K'(\beta K  + \varepsilon)$$
+
+This can be further decomposed to by expanding the brackets as such:
+
+$$ \hat \beta = (K' K)^{-1}(K'K)\beta + (K' K)^{-1}K'\varepsilon $$
 
 
+Now you might notice that $(K' K)^{-1}(K'K)$ cancels out because it is an identity matrix, such that the OLS estimate can be simpified to:
 
+$$ \hat \beta = \beta +  (K' K)^{-1}K'\varepsilon$$
 
+So the OLS esitmate $\hat \beta$ is the true population parameter of $\beta$ plus some new term $(K' K)^{-1}K'\varepsilon$. This term is where the *(potential)* bias that to the esitmate can come from. It arises if the errors and covariates are correlated!
 
+So if $E(\varepsilon | K) \neq 0$ then $(K' K)^{-1}K'\varepsilon \neq 0$, and hence the estimate of $\beta$ will be biased by the magnitude of this term. This is endogeneity bias.
+
+Because we know from the system of equations above that the errors are correlated to the covariates *(they're literally equations of each other)*, we know that the esimates will be biased *(we won't know the degree of the bias because that is unobserved)*. This bias is why we can't just run a regression of $GDP$ on a measure of institutions, $R$, and assume it's causal. It will be biased if we don't account for potential endogeneity. 
+
+The above example is a form of simultaneity bias, but omitted variable bias and measurement error can also cause endogeneity in linear models. One of the key conditions for causality to be meet is a source of **exogenous variation**. Exogeneity means from outside the system, and can be thought of as the inverse of endogeneity. As mentioned in the previous notebook, this is a key problem that most econometrics tries to solve. 
+
+## Using instruments to control for endogeneity
+
+There are actually a lot of ways to fix endogeneity. However, for our purposes today we will look at a relatively famous *(or infamous)* example from the paper: *“The colonial origins of comparative development: An empirical investigation”*, by Daron Acemoglu, Simon Johnson, and James A. Robinson. Here is the AEA link: https://pubs.aeaweb.org/doi/pdfplus/10.1257/aer.91.5.1369. 
+
+In this paper the authors use a method known as **Insturmental Variable** (IV) to control for this simultaneity bias of institutions and economic growth i.e. they try to solve the problem we've explored above!
+
+An "*instrument*" basically exploits some source of exogenous variation where there is some partial *(or incomplete)* random assignment. This allows the instrument to act as a source of randomisation for a specific group of units *(known as compliers)*. The source of exogenous variation the authors used was euorpean settlers mortality rates during colonisation. 
+
+Because the mortality of settlers is likely related to the types of institutions that were set up during colonisation *(think the extractive institutions in the Congo vs. the settler institutions of say Canada)*, but settler mortality should be entierly uncorrelated to GDP today *(except through the institutions that are set up)*. This suggests settler mortality can act as an instrument, a soure of exogenous variation.
+
+The authors approach requires a couple of asusmptions for the instrument to be appropriate. 
+- Firstly, the processes of colonisation set up different institutions.
+        - i.e. settler cononialism set up inclusive institutions for settlers such as in So-called Australia, Aotearoa / New Zealand or Turtle Island - USA;
+        - whilst other colonies set up extractive institutions such as the atlantic slave trade or the mitas in Peru.
+- Secondly, the strategy of colonosiation was dependent on the geographic conditions i.e. areas with lower mortality increased the likliehood of settlers institutions compare to extractive institutions.
+- Finally, those colonial institutions that were set up then have persisted today to impact economic performance. 
+
+Therefore, the authors propose the following causal chain:
+
+$$ 
+\text{settler mortality} \rightarrow  \text{type of settlements} \rightarrow \text{early institutions} \rightarrow \text{current institutions} \rightarrow \text{current economic performance}
+$$
+
+Okay, a fair enough hypothesis. So how can we use this "instrument" to esitmate an effect? Well let's get into how to estimate an instrumental variable.
+
+## Estimating an Instrumental Variable
+
+Firstly, some notation. Typically an instrument is usually represented as $Z$ *(a vector containing data on the instrument i.e. settler mortality)*. Then we usually also have our data on the outcome variable $Y$ (GDP per capita) and other covariates in $X$. Then we have our parameters $\beta$. So we have our typical linear model:
+
+$$ Y = X\beta + \varepsilon$$
+
+Cool, now for the instrument to be introduced. We can add it to this model by multiplting both sides by the instrument:
+
+$$ Z'Y = Z'X\beta + Z'\varepsilon$$
+
+Note that it is transposed to make sure the matrix is square. Now, we can simply solve for $\beta$:
+
+$$ 
+\hat\beta_{IV} = (Z'X)^{-1}Z'Y
+$$
+
+Okay cool, it looks really similar to OLS but is using the instrument instead. You will notice that the error has falled off again. If we decompose the above estimator we can see why: 
+
+$$ 
+\hat\beta_{IV} = (Z'X)^{-1}Z'(X\beta + \varepsilon)
+$$
+$$
+\hat\beta_{IV} = (Z'X)^{-1}Z'X\beta + (Z'X)^{-1}Z'\varepsilon 
+$$
+$$ 
+\hat\beta_{IV} = \beta + (Z'X)^{-1}Z'\varepsilon
+$$
+
+Now this is where some new assumptions come in to ensure that last pesky bias term dissapears! To estimate this model we must introduce some key assumptions, namely:
+- **Validity** (Strong Instrument | $Cov(Z,\varepsilon)=0$): The instrument $Z$ has strong explanatory power/effect on the variable of interest, $Y$.
+- **Relevance** (Independence | $Cov(Z,X)\neq0$): such that the IV randomly assigns or “as good as randomly assigns” individuals to treated or control groups.
+- **Exclusion Restriction**: The IV only affects outcomes through the variable of interest, $X$, and not through another unobserved mechanism.
+
+Crucially for our estimate to not be biased, the strong instrument assumption must be true i.e. $Cov(Z,\varepsilon)=0$. If there is no relationship between $Z$ and $\varepsilon$, then that bias term will converge to zero and the $\beta$ will be an unbiased estiamte. Otherwise, we're back to step one.
+
+Unfortunately, only the exclusion restriction can be directly tested. We can use the $F$-statistic to test for exclusion. If the F-stat is less than 10 the IV estimates suffers from “Weak Instrument bias”. There are some other tests we can look at, but I won't delve to much deeper into them here *(this explanation is already getting too long)*.
+
+Now that we've gone through all that theory - let's replicate the estimates from the paper!
+
+## load all packages
 
 ```{r load packages, message=FALSE}
 rm(list = ls()) 
@@ -79,9 +187,11 @@ library(ggplot2)
 options(scipen = 999) # makes numbers look nicer
 ```
 
-Great now lets load in some data for us to play around with. 
 
-This dataset is a very simple collection of house sales. We will try to model some prices to see which features of houses are most important in determining prices *(as well as how helpful they are at predicting house prices)*.
+## load data
+Note that we will only be replicating the estimates from the base population because they are the papers key results. 
+
+However, if you want to try recreate all the papers results, simply remove the filter in the below cell and apply the filters where necessary.
 
 ```{r data load}
 
@@ -93,6 +203,7 @@ df[, oth_cont := fifelse(shortnam %in% c('AUS', 'MLT', 'NZL'), 1, 0 )]
 ```
 
 Below is a table describing the data. 
+
 | Name | Description |
 | :--- | :--- |
 | `shortnam` | 3-letter country name |
@@ -109,6 +220,10 @@ Below is a table describing the data.
 
 Note that this data was downloaded from a MIT dropbox on 16/6/2026 -https://www.dropbox.com/scl/fi/3yuv9j514zuajzjfluoc1/maketable4.zip?rlkey=pq9l7bxktw1iqxe6fmoh26g79&e=1&dl=0
 
+### Table 2 Column 2
+Okay, the very first result we'll replicate is simply the regression of institutions on GDP. The paper adopts a measure of institutions that is an index of average expropriation risk *(an index between 0 and 10, where 0 is high expropriation risk and 10 is low expropriation risk)*. This stands in as a proxy for the types of institutions that were set up *(extractive vs inclusive)*. It is crude but it gets the job done for now. Our outcome variable is the log of GDP in 1995 adjusted for purchase price parity. 
+
+Okay, we know how to do this one, we can just throw them into a regression!
 
 ```{r table 2 column 2, message=FALSE}
 t2c2_mod <- lm(logpgp95 ~ avexpr, data = df)
@@ -122,8 +237,15 @@ df %>%
   theme_classic()
 ```
 
+Okay, so we see the coefficient is around $0.52$. Or in words, a one point increase in the expropriation indicator *(rememebering that a higher score means a lower risk of expropriation)*, we expect GDP per capita in 1995 to be 52\% higher, ceterius paribus.
 
+Okay, cool this is a helpful baseline for us to test if the IV is working. We know this estimate is likely biased, so we should expect the IV estimate to be quite different. 
 
+We can also see in the plot the above model fit to the data - recreating figure 2 in the paper.
+
+### Table 4 Panel B Column 1
+
+Okay then next little thing we need to explore is a test for the exclusion assumption. We can do this by running the first stage of the regression i.e. `avexpr ~ logem4`. We can then use the $F$ test to see if the instrument suffers from weak instrument bias. This will also be the first-stage of our IV regression.
 
 
 ```{r table 4 Panel B column 1, message=FALSE}
@@ -139,31 +261,58 @@ df %>%
   theme_classic()
 ```
 
+We can see from the $F$ stat that the statistic is well over 10. This is some good evidence that the instrument doesn't suffer from weak instrument bias. We can also see quite a strong and statistically significant negative relationship between settler mortality and the risk of expropriation i.e. the higher the settler mortality, the more likely the risk of expropriation. The plot also fits the above model - recreating figure 3 from the paper.
 
+### Table 4 Panel A column 1 
+
+Okay now that we've got the testing out of the way, lets us the instrument to estimate $\hat \beta_{IV}$. 
+
+Handly, the `ARE` package in `R` has a helpful `ivreg()` function that esimates this approach for us. 
+
+Firstly, lets use this function to estimate the simple regression with only the `avexpr` as a dependent variable and `logem4` as the instrument.
+
+Note that we can apply the instrument by using the `|` symbol to separate the equations as such:
 
 ```{r Table 4 Panel A column 1 }
 t4pAc1_IV_mod <- ivreg(logpgp95 ~ avexpr | logem4, data = df)
 
-summary(t4pAc1_IV_mod)
+summary(t4pAc1_IV_mod, diagnostics = TRUE)
 
 ```
 
+As you can see the coefficient has jumped from ~$0.52$ to ~$0.94$. This suggests that the OLS estimate was downwardly bias and that the IV has removed the potential simultaneity bias. 
+
+Now, the model suggests that for a one point increase in the expropriation indicator *(rememebering that a higher score means a lower risk of expropriation)*, we expect GDP per capita in 1995 to be 94\% higher, ceterius paribus.
+
+That's quite a large effect!
+
+One thing the `AER` package does that the python package does not is provide extra diagnostics. The "Weak instruments" tests is the $F$ test we did earlier where the null is a weak instrument. The Wu-Hausman test in this instance compares the IV estimates against the OLS estimates for consistency *(we will got through this test in the panel data notebooks)*. The null proposes that the OLS estimates are preferable, and therefore our results indicate the alternative hypothesis.
+
+### Table 4 Panel A column 7
+
+Next lets create the other base sample esitmates from columns 7 and 8 in the paper. These estimates add dummy variables for different continents as well as a measure of absolute latitude.
+
+Firstly, the model with the continent dummy variables:
 
 ```{r Table 4 Panel A column 7}
 t4pAc7_IV_mod <- ivreg(logpgp95 ~ avexpr + asia + africa + oth_cont | 
                          logem4 + asia + africa + oth_cont,
                        data = df)
 
-summary(t4pAc7_IV_mod)
+summary(t4pAc7_IV_mod, diagnostics = TRUE)  # returns extra tests
 ```
+
+Next the model with the continent dummy variables and absolute latitude.
 
 ```{r table 4 Panel B column 8}
 t4pAc8_IV_mod <- ivreg(logpgp95 ~ avexpr + lat_abst + asia + africa + oth_cont | 
                          logem4 + lat_abst +asia + africa + oth_cont,
                        data = df)
 
-summary(t4pAc8_IV_mod)
+summary(t4pAc8_IV_mod, diagnostics = TRUE)
 ```
+
+Great, those estimate seem to line up with those in the paper. The paper does more robustness checks - so feel free to try and replicate this if you like. But for now, let's summarise all these results into a nice table:
 
 ```{r stargrazer tests, warning=FALSE}
 stargazer(t2c2_mod, t4pbc1_mod, t4pAc1_IV_mod, t4pAc7_IV_mod, t4pAc8_IV_mod,
@@ -186,4 +335,17 @@ stargazer(t2c2_mod, t4pbc1_mod, t4pAc1_IV_mod, t4pAc7_IV_mod, t4pAc8_IV_mod,
 ```
 
 
+This is a nice way to easily display the results of each model to compare them against each other *(and isn't to disimilar to the table used in the paper)*.
 
+We can see across all the estimates the initial effect using OLS, our first stage results for the simple model in column 2 and then all our specifications for the IV estimates. 
+
+All the IV estimates range from between $0.94$ to $1.10$ and line up with the paper. They are also significantly higher than the OLS estimates, highlighting how we can use an instrument to control for endogeneity bias.  
+
+## A note on the paper itself
+
+This paper is often credited as the research the won the 2024 nobel prize in economics. I chose this paper because it is quite a clever implementation of instrumental variables and as such is a nice way to introduce people to the concept. 
+
+But that doesn't mean it's without criticism. I will leave a link to some interesting critiques of not just this paper, but the relation of econometric investigations more broadly and challenging questions of its relation to colonialism and capitalism: 
+
+- https://theconversation.com/this-years-nobel-prize-exposes-economics-problem-with-colonialism-241400
+- https://medium.com/@pedagogyoftheeconomists/economics-has-a-colonialism-problem-a109c5812715

@@ -58,13 +58,18 @@ a:hover {
 }
 </style>
 
+This notebook is a very (very) simple introduction to time series analysis. It will not go into any details on things like stationarity, exponential smoothing, ARIMA, cointegration, error correction models, VAR or other time series approaches. 
+
+All these details will remain relatively simple with a nice example. In fact, an example that highlights the key limitations of time series analysis within econometrics. This example will explore a "static" time series model to determine the relationship between different variables at the same time. This generally refers to a model of the form:
+
+$$ Y_t = X_t'\beta+\varepsilon_t $$
+
+This actually means we won't be capturing any dynamics beause we will be looking at the same place $i$ at the same point in time $t \in 1,2,...T$. However, static time series models are often used quite often in economics, such as the phillips curve. So it can be helpful to have a bit of background in static time series models nonetheless.
+
+Our little example will follow the implementation of an increase excise tax on tabacoo during 1989 in California. We will follow the sales of cigarettes per capita as well as the price to determine the price elasticity of cigarettes, as well as estimate the effect of the increase excise on cigarette sales. 
 
 
-
-
-
-
-
+In 1989, proposition 99 was enacted that increased the excise tax on cigarettes by 25 cents per pack in California. In theory, this increase in cost should decrease the number of cigarettes consumed. Let's have a look at the time series for cigarette sales to get a bit of an idea how how they've evolved.
 
 
 ```{r load packages, message=FALSE}
@@ -90,7 +95,7 @@ df <- setDT(read.csv("https://raw.githubusercontent.com/Michael-Morgan-Giles/pyt
 df <-  df[california == "True"]
 
 # add binary variable for excise tax intro
-df[, excise_tax_intro :=  fifelse(after_treatment == TRUE,1,0)]
+df[, excise_tax_intro :=  fifelse(after_treatment == "True",1,0)]
 
 df <-  df[, .(year, 
               cigsale,
@@ -101,18 +106,30 @@ df <-  df[, .(year,
 
 ```
 
+After loading in all that data, we can see that there has been a general downward trend in cigarette sales per capita since the early 1970's. 
 
-
-
+At a glance, it does kind of seem that the rate of decrease speed up a bit after the excise tax was introduced *(dashed black line)*. However, not by that much if at all. It could certainly just be a continuation of the existing trend instead of the introduction of the excise increase. 
 
 ```{r cigsale plt}
 df %>% 
   ggplot(aes(x = year, y = cigsale))+
   geom_line(color = "blue")+
-  geom_vline(xintercept = 1989)+
+  geom_vline(xintercept = 1989, linetype = "dashed")+
   theme_classic()
 
 ```
+
+What we can do with a static time series model is estimate contemporaneous effects such as the price elasticity of cigarette sales.
+
+```{r price elasticity of demand}
+summary(lm(ln_cigsale ~ excise_tax_intro + ln_retprice, data = df) )
+```
+
+We can see that there is an inelastic good, because $| \beta_{\ln retprice} | < 1$. For every 1% increase in the retail price of cigarettes, we can expect cigarette sales to decrease by 0.34% *(well below a 1-to-1 decrease)*. 
+
+Also of interest is the `excise_tax_intro` dummy variable that suggests the introduce of the excise tax saw an approximately 27% decrease in cigarette sales *(quite a large effect)*. 
+
+The adjusted $R^2$ also suggests that this model is quite a good fit. Let's have a look at how the models prediction compares to the observed time series. 
 
 ```{r simple static model}
 simple_static_mod <- lm(cigsale ~ excise_tax_intro + ln_retprice, data = df) 
@@ -124,8 +141,8 @@ df[, simple_mod_pred := predict(simple_static_mod)]
 df %>% 
   ggplot(aes(x = year))+
   geom_line(aes(y = cigsale), color = "blue")+
-  geom_line(aes(y = simple_mod_pred), color = "orange")+
-  geom_vline(xintercept = 1989)+
+  geom_line(aes(y = simple_mod_pred, colour = "simple model prediction"), color = "orange")+
+  geom_vline(xintercept = 1989, linetype = "dashed")+
   theme_classic()
 
 
@@ -135,15 +152,26 @@ df %>%
   theme_classic()
 ```
 
+It's not to bad of a fit at all. However, there is some deviations and especially after the tax was introduced. If we plot the predictions against the actuals we can see that it is not a straight line.
+
+This simple model shows a really big decrease in cigeratte consumption per capita. However, we can make things a bit more complex by adding some year dummy variables for the post excise tax period *(I am excluding the pre excise tax period dummy variables due to their being limited observations)*. 
+
+If we add dummy variables for each year, we can use these as covariates in the model to hopefully improve our models predictions. 
+
+
 ```{r complex model}
 # add dummy varaibles for years
 df <- dummy_cols(df, select_columns = "year")
 
+summary(lm(as.formula(paste0("ln_cigsale ~ excise_tax_intro + ln_retprice + ",  
+                           paste0("year_",as.character(levels(as.factor(df[year >= 1988, year]))), sep = " ", collapse = "+"))), 
+                         data = df))
+
 complex_static_mod <- lm(as.formula(paste0("cigsale ~ excise_tax_intro + ln_retprice + ",  
-                           paste0("year_",as.character(levels(as.factor(df[year > 1987, year]))), sep = " ", collapse = "+"))), 
+                           paste0("year_",as.character(levels(as.factor(df[year >= 1988, year]))), sep = " ", collapse = "+"))), 
                          data = df) 
 
-summary(complex_static_mod)
+
 
 df[, complex_mod_pred := predict(complex_static_mod)]
 
@@ -163,6 +191,17 @@ df %>%
 
 ```
 
+After adding all of the annual dummy variables, the effect has increased to a 64% decrease. The price elasticity of cigarettes has actually increased for -0.22% for every 1% increase in the retail price of cigarettes *(still an inelastic good)*. 
+
+The adjusted $R^2$ is now basically perfect *(this is be a problem)*. This model is overfit, especially if you look at the prediction for the post treatment intervention. It's a perfect fit *(blue and orange line are identical)*! 
+
+You can see this in the prediction vs actual plots as well, with that left tail now being a straight line. If I added the pre- excise tax dummy variables this model would probably have an $R^2$ of $1$ *(it is also undentified because $k>n$ i.e. there are more regressors than observations)*.
+
+It might seem like a good thing that the model is great at making in-sample predictions, but it's actually a real problem. Say we try to generalise this effect to another scenario. What do you think might happen? 
+
+Well by way of example, let's use this model to see what might happen in another state if they were to introduce a similar increase in the excise tax.
+
+
 ```{r data load new}
 
 df_new <- setDT(read.csv("https://raw.githubusercontent.com/Michael-Morgan-Giles/python-causality-handbook/refs/heads/master/causal-inference-for-the-brave-and-true/data/smoking.csv"))
@@ -171,7 +210,7 @@ df_new <- setDT(read.csv("https://raw.githubusercontent.com/Michael-Morgan-Giles
 df_new <-  df_new[state == 36]
 
 # add binary variable for excise tax intro
-df_new[, excise_tax_intro :=  fifelse(after_treatment == TRUE,1,0)]
+df_new[, excise_tax_intro :=  fifelse(after_treatment == "True",1,0)]
 
 df_new <-  df_new[, .(year, 
               cigsale,
@@ -208,5 +247,9 @@ df_new %>%
 
 ```
 
+As you can see, when we fit this model to another states time series of cigarette sales, the model is basically entirely incorrect in its prediction. 
 
+The model is "overfit" to the specific example in california and hence isn't very generalisable to other scenarios. This highlights one limitations of static time series models in that because we're only looking at one unit, $i$, it can be really difficult to generalise results to other settings. This ties to a set of concepts known as **internal** and **external** validity. To simplify substantially, internal validity is how accurate the estimated result is for the specific example being explored, whilst external validity is how generalisable the results is to other examples / contexts.  
+
+To get a true causal effect we're going to need a bit more robust approach. We will return to this exactly example when we look at difference-in-differences (DiD).
 
