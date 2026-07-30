@@ -58,14 +58,34 @@ a:hover {
 }
 </style>
 
+Panel data is the combination of cross-sectional and time series data. This means the data follows the same individual, $i$, over time, $t$ i.e. $\{Y_{it}, X_{it} \}, \forall i \in 1, ...,n; \quad t \in 1,...,T$. This means the total observations in the panel will be $nT = N$.
 
+It follows that a lienar panel data model can be described as:
 
+$$ Y_{it} = X_{it}'\beta + u_{it}$$ 
 
+Nothing to different so far. The real changes arise in the error term, $u_{it}$. This error term is now made up of different components that can decomposed. In the typically model it is assumed that there are three major components inside the error term: 
 
+$$ u_{it} = \alpha_i + \lambda_t + \varepsilon_{it} $$
 
+Each of the above components tend to be categorised as "unobservable heterogeneity". Each item can be  described as: 
 
+- **unit-specific heterogeneity**, $\alpha_{i}$. Unobservable differences that are constant to the unit i.e. don't change over time. 
+    - This includes effects that don't change *(or change very little)* over time like geographical features, day of birth, parents, Siblings, cities, cultural norms etc.
+- **time-specific heterogeneity**, $\lambda_t$. Unobservable differences that are constant to the time period i.e. do change over time. 
+    - This includes things that change quite often like national policy changes, macroeconomic shocks, recessions, changes to institutions etc.
+- **idiosyncratic heterogeneity**, $\varepsilon_{it}$. Unobserved differences that can change over both time and units. 
+    - This includes all of the unobserved heterogeneity that cannot be attributed to the other error terms that are specific to the individual and change over time, but aren't *(or cannot)* be observed, such as an individuals health-specific outcomes. 
 
+You might have noticed that because there are now time-invariant $(\alpha_{i})$ and unit-invariant $(\lambda_{t})$ components to the above error term, that the endogeneity assumption might be invalid if any of the components above are correlated to anything in $X_{it}$. You would be right to worry about this, and today we will go through a few different estimators and tests to determine if we can say:
 
+$$ \text{Cov}(u_{it}, X_{it}) = 0 $$
+
+Crucially for panel data models is how we treat these new error components. If we treat them as a random variable it is said that they are **random effects**. If we treat them as a parameter to estimate, then they are known as **fixed effects**. This gives us some insight into the two new estimators we can use to solve the potential endogeneity issues introduced in panel data.  
+
+To solve these issues, it is probably easiest to go through an example. So, let's look at a data set of `co2` and carbon taxes for $162$ countries over $29$ years since 1990 *(when the worlds first carbon tax was introdued in Finland)*.
+
+But first, let us load in the key packages and data to set up our panel dataset, most notably `plm` which is a panel extension of the base `lm()` function in `stats`.
 
 ```{r load packages, message=FALSE}
 rm(list = ls()) 
@@ -75,18 +95,19 @@ library(data.table)
 library(ggplot2)
 library(fastDummies)
 library(plm)
+library(lmtest)
+library(sandwich)
+library(stargazer)
 
 options(scipen = 999) # makes numbers look nicer
 ```
 
-Great now lets load in some data for us to play around with. 
-
-This dataset is a very simple collection of house sales. We will try to model some prices to see which features of houses are most important in determining prices *(as well as how helpful they are at predicting house prices)*.
 
 ```{r data load}
 
 df <- setDT(read.csv("https://raw.githubusercontent.com/Michael-Morgan-Giles/regression_analysis/refs/heads/main/data/Co2.csv"))
 
+# just creating some variables that will be helpful later
 df[, gdp_per_cap := gdp / population]
 df[, ln_gdp_per_cap := log(gdp_per_cap)]
 df[, ln_co2_per_capita := log(co2_per_capita)]
@@ -96,16 +117,41 @@ df[, CP := Effective.Carbon.Price..Sum.of..carbon.price.rate...proportion.of.cou
 df[, ln_CP := log(CP + 1)]
 df[, CP_DV := Carbon_price_DV]
 
-# set up panel
-panel <- pdata.frame(df, index = c('iso_code', 'year'))
-
 ```
 
+We can set up our panel with `iso_code` as our unit *(country)* and `year` as our time dimension. 
 
+```{r set panel}
+panel <- pdata.frame(df, index = c('iso_code', 'year'))
+```
+
+Our outcome of interest will be `ln_co2_per_capita`, the natural log of Co2 emissions per capita by country. We will then consider a dummy variable for if the country $i$ has a carbon tax in year $t$; `CP_DV`, the log of gdp per capita for the country and year; `ln_gdp_per_cap`, the price of the "feed in tariff" *(a sort of price for solar power)*; `ln_feed_in_tariff` and the natural log of the actual price of the carbon tax itself; `ln_CP`. 
+
+Since the covariates will be the same for each estimator, we will assign a formula now and use this for each method.
 
 ```{r formula}
 formula <- as.formula("ln_co2_per_capita ~ CP_DV + ln_gdp_per_cap + ln_feed_in_tariff + ln_CP")
 ```
+
+Below you can see the descriptive statistics of our dataset: 
+
+```{r summary stats}
+summary(df[,.(ln_co2_per_capita, CP_DV, ln_gdp_per_cap, ln_feed_in_tariff, ln_CP)])
+```
+
+# Pooled OLS
+
+Okay so now we have our panel, how do we use it? Well the very first thing we can try is to just continue what we have been doing and use OLS. 
+
+This might seem odd because we've just noted there are new components in the error term that could bias any estimates, however if the assumption of exogeneity holds then the OLS estimator will be efficient, consistent and unbiased. 
+
+So, let's try just ignore the dimensions by "pooling" them into an OLS estimator. This is where the name "Pooled OLS" comes from. It requires all the key assumptions as well as no serial / autocorrelation between the error term components. 
+
+So hopefully this feels quite familiar, we can simply estimate $\beta_{POLS}$ as such: 
+
+$$ \beta_{POLS} = (X'_{it}X_{it})^{-1}(X'_{it}Y_{it})$$ 
+
+Let's see what this estimate looks like using our Co2 data. Note we will be using the `plm` package because it's `plm()` function is really handy for basic linear panel models:
 
 
 ```{r pooled ols}
@@ -113,10 +159,128 @@ pols <- plm(formula,
             data = panel, 
             model = "pooling")
 
-summary(pols, vcov = vcovHC(pols, type = "HC1", cluster = "group"))
+#summary(pols, vcov = vcovCL(pols, cluster = ~iso_code))
+coeftest(pols, vcov. = vcovHC(pols, cluster = "group"))
+```
+
+Okay we've got some estimates, but interestingly it looks like the `CP_DV` coefficient is not statistically significant. We would expect the carbon price to be negatively related to Co2 per capita, which it is not in the above model. We do see a negative elasticity meausre in the `ln_CP` coefficient. However, this might be a sign that we can't just pool our dimensions, rather we might need to test if there is any endogeneity bias. 
+
+One of the first things we can do is check for "homoskedasticity" i.e. consistent variance.
+
+## Homoskedasticity : plot residuals to see if variance is growing
+
+Homoskedasticity can be thought of as consistent variance. Heteroskedasticity can be thought of as increasing / inconsistent variance. We can actually visually check this by plotting the models predicted values against it's residuals. 
+
+The plot should look random if there is consistent variance, if the plot doesn't look random it is likely a sign of some changing variance. This also suggests to us that we should be consider using clustered standard errors. A concept I unfortunately won't go into in any depth, but they are basically standard errors calculated at the unit level to prevent correlation between units *(or time)* impacting the standard errors. 
+
+For now, let's plot the POLS models predictions against it's residuals:
+
+```{r homoskedasticity plot}
+
+data.frame(predicted_values = predict(pols), residuals = pols$residuals) %>% 
+  ggplot(aes(x = predicted_values, y = residuals)) +
+  geom_point(colour = "blue")+
+  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+  labs(title = "Homoskedasticity Test") + 
+  theme_classic()
+
+```
+It might be a little be difficult to tell, but the above plot doesn't look entirely random. There are some variables that appear to be correlated to each other (drawing straight lines almost). The residuals also appear to have more positive outliers than negative outliers *(we would hope they are symmetrical)*.
+
+So it could be argued there is heteroskedasticity in the errors, but it's hard to be definitive about it. Maybe a more quantitative statistical test can help us?
+
+## White-Test (Lagrange Multiplier test)
+
+One quite common test for heteroskedasticity is the "White test". Without getting to into the details this test basically suggests the following hypothesis test: 
+
+$$ H_0 \ : \ Errors \ are \ Homoskedastic $$
+$$ H_1 \ : \ Errors \ are \ Heteroskedastic $$
+
+Therefore, if we adopt $H_0$ we accept that heteorskeasticity is present and either heteroskeastic standard errors should be used or an estimator that can control for this heterogeneity must be applied. 
+
+Let's test this using the `white()` function from `skedastic`:
+
+```{r white test, eval=FALSE, include=FALSE}
+skedastic::white(as.matrix(pols$residuals))
+```
+
+Okay the results are indicating there is certainly heteroskedasticity present. This is to be expected because we haven't contorlled for those unit or time effects that a panel can have. But to be really certain, we can also apply another test to be certain!
+
+## Breusch-Pagan-Test
+
+The Breusch-Pagan Lagrange Multiplier test for heteroscedasticity. It is similar to the White test, but instead the hypthesis is that the variance of the models residuals should be unrelated to the covariates in $X_{it}$. Let's test this using the `bptest` function from `lmtest`:
+
+```{r breusch pagan test}
+lmtest::bptest(pols)
+```
+
+The results are again showing heteroskedasticity is present. So, now we know the POLS esitmates are probably biased and or inconsistent. So we should probably be using a different esitmator. However, the problems with POLS don't stop here! There is still the issue of autocorrelation of the error term components. 
+
+# Autocorrelation of Errors
+
+Serial correlation / autocorrelation of the errors violates the endogeneity assumption of linear model etsimates *( the errors are not drawn from an independently and identically distributed population if autocorrelation exists)*.
+
+This poses further problems for our standard errors. One test we have is the classic Durbin-Watson Tets.
+
+## Durbin-Watson-Test
+
+The Durbin-Watson statistic provides a simple serial correlation test that assumes an autoregressive $(AR(1))$ process for the errors. 
+
+The Durbin-Watson-Test will have one output between $0$ and $4$. The mean $(= 2)$ would indicate that there is no autocorrelation identified, $0$ to $2$ means positive autocorrelation *(the nearer to zero the higher the correlation)*, and $2$ to $4$ means negative autocorrelation *(the nearer to four the higher the correlation)*.
+
+Let's calculate it using the `durbin_watson` function from `statsmodels`:
+
+```{r durbin watson test}
+plm::pdwtest(pols)
 
 ```
 
+Our result is $0.13$, so there is really strong positive autocorrelation. Our solution to this is to use appropriate standard errors. In panel data models this tends to mean clustering our standard errors at the appropriate level *(usually the unit level)*. So, we see there are lots of problems with the POLS estimates. How can we fix them? 
+
+Well the two options we'll explore today are to treat those new error components $(\alpha_i, \lambda_t)$ as either a random variable or a parameter to esitmate. Firstly, let's look at what happens when we treat it as a random variable. 
+
+# Random Effects
+
+To start say we have our typical linear panel model with a "one-way" or "individual" effect: 
+
+$$ Y_{it} = X_{it}'\beta + \alpha_i + \varepsilon_{it}$$ 
+
+*(note the time effects are not included in this example, see the Fixed Effects section for more details)*.
+
+Okay so the first step in treating, $\alpha_i$ as a random variable is to define some parameters, noteably some variance parameters: 
+
+$$ \theta = 1 - \sqrt \frac{\sigma^2_e}{\sigma^2_e + T\sigma^2_{\alpha}} $$
+
+Where $\sigma^2_e$ is the variance of our idiosyncratic error and $\sigma^2_{\alpha}$ the variance for our unobserved *(individual)* heterogeneity term. $\theta$ is a scalar value that will become helpful once we apply our quasi-demeaning centring matrix, $M^0_T = I_T - \frac{1}{T}ii'$ *(I hope this looks familiar from the intro notebook!)* to our variance-covariance matrix, $\Omega$. Let's express the variance-covariance matrix as:
+
+$$ \Omega = \sigma^2_{\alpha} i_Ti_T' + \sigma^2_eI_T =  \sigma^2_e(M^0_T + \frac{1}{\varphi^2}(I_T - M^0_T)$$
+
+Where $\varphi^2 =\frac{\sigma^2_e}{\sigma^2_e + T\sigma^2_{\alpha}}$ such that our scalar can be defined as $\theta = 1 - \varphi$. Okay cool we've got our variance parameters into our variance-covariance matrix, let's invert it! 
+
+
+$$ \Omega^{-1} =  \frac{1}{\sigma^2_e}(M^0_T + \varphi^2(I_T - M^0_T))$$
+
+We can decompose this matrix and it will remove the exponents as such $(\Omega^{-1} = \Omega^{-\frac{1}{2}}\Omega^{-\frac{1}{2}})$:
+
+$$ \Omega^{-\frac{1}{2}} =   \frac{1}{\sigma_e}(M^0_T + \varphi(I_T - M^0_T)$$
+
+Now we can apply this quasi-demeaned matrix transformation to our model as such:
+
+$$ \Omega^{-\frac{1}{2}}Y_{it} = \Omega^{-\frac{1}{2}}X_{it}'\beta + \Omega^{-\frac{1}{2}} \alpha_i+ \Omega^{-\frac{1}{2}}\varepsilon_{it}$$ 
+
+Alright, now we can solve for $\beta$ as:
+
+$$ \hat \beta_{RE} = (X'_{it}\Omega^{-1}X_{it})^{-1}(X'_{it}\Omega^{-1}Y_{it})$$
+
+Remeber that $(\Omega^{-1} = \Omega^{-\frac{1}{2}}\Omega^{-\frac{1}{2}})$) - for more on these derivations see this helpful explainer - https://econ.pages.code.wm.edu/407/notes/docs/panel_re.html.
+
+This all might seem rather random and unmotivated *(and in a way it is because there are just my notes)*. But what the introduction of this parameter does is allows the model to only subtract the parts of the errors that are correlated to the $X_{it}$ matrix. To explain this by way of example, say that $\theta = 0$, then the above estimate would converge towards the POLS estimate. This is because because it would keep 100% of the mean in the $X_{it}$ matrix. 
+
+This would only work if there is not correlation between the unit effects because the term $\frac{\sigma^2_e}{\sigma^2_e + T\sigma^2_{\alpha}}$ would converge to one such that $ \sigma^2_e = \sigma^2_{\alpha}$. After you've read this entire notebook, you should come back here and ask yourself what would happen if $\theta = 1$?
+
+For now, this means is that the transformation of the model keeps the "parts" of the errors $(e_{it}, \alpha_i)$ that are both homoskedastic and uncorrelated to the $X_{it}$ matrix. This solves the problems we've outlined above in the POLS estimates *(at least in theory)*.
+
+Okay, let's try and actually estimate the $\beta$ using this random effects transformation. The `plm` comes to our rescure again *(note that the plm packages allows unit and time fixed effects - but we will just estimate unit fixed effects the same as the python notebook)*:
 
 
 ```{r random effects}
@@ -129,7 +293,45 @@ summary(re_mod, vcov = vcovHC(re_mod, type = "HC1", cluster = "group"))
 
 ```
 
+Okay, we can now see that unlike the POLS results, the `CP_DV` coefficient is statistically significant and has the expected sign. It is also now quite a large effect, suggesting a 17% decrease in per capita co2 emissions for countries with a carbon price. This is much more in line with expectations than the POLS estimates and could be an indication that we've attenuated some of the effects of autocorellation and heteroskedasticity in the unit error terms. 
 
+It's also interesting to note how the `ln_gdp_per_cap` elasticity has decreased quite signifcantly and the `ln_Feed - in - Tariff` coefficient now has the "wrong" sign and is statistically insignificant. The price of the carbon price has the right sign but the effect has attenuate quite a lot *(likely being absorbed into the `CP_DV` coefficient)*. Overall, it appears these results are more consistent with our expectations than the POLS estimates. 
+
+For those interested, this is the theta value for this model *(and some other interesting info)*:
+
+```{r theta}
+re_mod$ercomp
+```
+
+Now that we've explored how to treat the unobserved effects as a random variable, how about as a parameter to be estimated? 
+
+# Fixed Effects
+
+Unlike in the RE estimator where we quasi-demean the random effects estimate that keeps the "best" parts of the $X_{it}$ matrix, in the FE model we apply the "within" transformation to entirely remove those effects from the model. Let's explore how to do this!
+
+The “within” transformation that takes the averages across time “within” the group $i$. It then subtracts this within group average from the matrix $X_{it}$ which removes the unobservable individual heterogeneity $\alpha_i$ because they are time invariant *(note that this can be extended to remove unobservable time effects as well, $\lambda_t$)*. For our purposes here, let's assume our model is a "two-way" model that has both unit and time fixed effects i.e:
+
+$$ Y_{it} = X_{it}'\beta + \alpha_i + \lambda_t + \varepsilon_{it}$$ 
+
+Now to apply the within transformation we can apply a centering matrix *(I hope you remember this from the intro notebook!)*, $M^0_T = I_T - \frac{1}{T}ii'$.
+
+Now, this matrix transforms $X_{it}$ by subtracting the mean of $X_{it}$ across the time dimension so the "within" the unit group. We can also transform the time effects by subtracting the cross-sectional means with the matrix $X_{it}$, $M^0_N = I_N - \frac{1}{N}ii'$. If we take these two transformation matrices $(M^0_N, M^0_T)$ and multiply them by the model above we get: 
+
+$$ M^0_NM^0_T Y_{it} = M^0_NM^0_T X_{it}'\beta + M^0_NM^0_T\alpha_i + M^0_NM^0_T\lambda_t + M^0_NM^0_T\varepsilon_{it}$$ 
+
+Now that probably looks complicated, but note that because the $\alpha_i$ and $\lambda_t$ are time and unit invariant, their averages of these will be zero i.e. $E[M^{0}_{N} M^{0}_{T} \alpha_i] = 0$ & $E[M^{0}_{N} M^{0}_{T} \lambda_t] = 0$. This means the above simplifies to: 
+
+$$ M^0_NM^0_T Y_{it} = M^0_NM^0_T X_{it}'\beta+ M^0_NM^0_T\varepsilon_{it}$$ 
+
+Now hopefully that looks a bit familiar, at this point we can solve for $\beta$ using the OLS transformation:
+
+$$ \hat \beta_{FE} = (X'_{it} M^0_N M'^0_N M'^0_T M^0_T X_{it})^{-1}(X'_{it} M^0_N M'^0_N M'^0_T M^0_T Y_{it}) $$
+
+Okay this is getting really cluttered I admit. But we have one last little property to apply from our matrices refresher from the first notebook. Note that for both transformation matrices, they are idempotent i.e. $M^0_T = M'^0_T$ & $M^0_N = M'^0_N$. This means we can remove that extra transposed transformation matrix for such that the above simplifies to: 
+
+$$ \hat \beta_{FE} = (X'_{it} M^0_N M^0_T X_{it})^{-1}(X'_{it} M^0_N M^0_T Y_{it}) $$
+
+Now you'll notice we have an estimator that has removed those unit and fixed effects from the model entirely. This is compared to the random effect example we explored above that kepts only the fraction of the errors the that are explained by the variance of the errors. This means that this estimate for $beta$ will not have any relationship to those unobserved effects *(and hopefully that means no bias either)*. Okay, now that we've got that out of the way let's actually estimate this model! The `plm` package again comes to our rescue:
 
 ```{r fixed effects}
 fe_mod <- plm(formula, 
@@ -141,16 +343,51 @@ summary(fe_mod, vcov = vcovHC(fe_mod, type = "HC1", cluster = "group"))
 
 ```
 
+Alright now the coefficients are slightly different again *(as expected)*. Unlike the POLS results, the `CP_DV` coefficient is statistically significant and is a large effect, suggesting a 14% decrease in per capita co2 emissions for countries with a carbon price. This effect is very similar to the RE estimates as well. 
 
+The coefficients for `ln_gdp_per_cap`, `ln_Feed - in - Tariff` & `ln_CP` coefficients have changed in the similar direction as the RE estimates compared to the POLS estimates, and are of similar magnitude to the RE estimates.
+
+This is quite a positive sign that the effects measured in FE and RE and controlling for the same problems we identified above for POLS *(autocorrelation and heteroskedasticity)*. 
+
+Just quickly before we move on, it's at this point you might want to quickly good back and ask what happens to the random effects estimator when $\theta = 1$ *(hint maybe take a look at what the $\theta$ estimates from the RE estimates is in the estimates above)*.
+
+# Hausman Test
+
+
+Now that we've estimated both random and fixed effect estimators, which one do we choose? A great question, and handily there is a nice test we can use to determine which estimator to choose. 
+
+It all hinges on the fact that if we can truly determine that $E(\alpha_i | X_{it}) = 0$, then the RE estimator will be efficient. However, if it's violated we know the esitmator will be inconsistent (that same holds for $E(\lambda_t | X_{it}) = 0$).
+
+This is handy because if the unobserved effects are correlated with anything in $X_{it}$, then FE estimator will be consistent. This creates a trade-off that can be summarised in the below table: 
+
+
+|   Endogeneity Condition  | Random Effects           | Fixed Effects|
+|--------------------------|--------------------------| -------------|
+| $E(\alpha_i | X_{it}) = 0$    |  Consistent & Efficient  | Inconsistent |
+| $E(\alpha_i | X_{it}) \neq 0$ |  Consistent & Infficient | Consistent   |
+
+
+We can test this restriction using something called the Wu-Hausman test where: 
+
+$$ H_0 : E(\alpha_i | X_{it}) = 0$$
+$$ H_1 : E(\alpha_i | X_{it}) \neq 0$$
+
+Great! Now without getting too lost in the derivation here, we can adopt the Wu-Hausman $(WH)$ statistic that is distribution alonge the $\chi^2_{\alpha}(k)$ distrbution ($k$ is the degrees of freedom parameter). Our $WH$ statistic is define as:
+
+$$ WH = (\hat\beta_{FE} - \hat\beta_{RE})'(Var(\hat\beta_{FE} - \hat\beta_{RE}))^{-1}(\hat\beta_{FE} - \hat\beta_{RE}) $$
+
+If $WH > \chi^2_{\alpha}(k)$, we prefer the FE model, otherwise the RE Model. Fortunately for us `plm` has the wu-hasuman test built into the function `phtest()` as such:
 
 ```{r hausman test}
-phtest(fe_mod, re_mod)
+plm::phtest(fe_mod, re_mod)
 
 ```
 
+The p-value is below 0.05 so we can adopt $H_1$ with at least 95% confidence. This suggest the FE estimator is preferred to the RE estimator because the RE estimator is inefficient.
 
+# Compare the Final Results
 
-
+Just as a nice example of how to create tables with our results, we can use the `stargazer` function from `stargazer` to make a nice table as such:
 
 ```{r coefficient table, warning=FALSE}
 stargazer(pols, fe_mod, re_mod,
@@ -169,7 +406,8 @@ stargazer(pols, fe_mod, re_mod,
 
 ```
 
+Overall, these results are relatively consistent with other *(and more in depth)* research on this topic: https://openresearch-repository.anu.edu.au/server/api/core/bitstreams/623b4b43-2b7e-4796-82b6-e601ab108361/content. 
 
+More importantly for us, is that we can see how panel data estimators such as fixed or random effects can help ameliorate issues of autocorrelation, heteroskedasticity and endogeneity when randomisation might not be possible. They do not always *(nore very often)* results in a causal effect, but are generally more robust than cross-sectional or pooled estimates. 
 
-
-
+See this great summary on the positives and negatives of fixed effects *(fixed effects tend to be much more common in econometrics)* in this paper by Matthias Collischon and Andreas Eberl: https://www.econstor.eu/bitstream/10419/288529/1/s11577-020-00699-8.pdf).

@@ -58,15 +58,137 @@ a:hover {
 }
 </style>
 
+Generalised Linear Models (GLMs) are simply a class of models that use linear predictors to make predictions. In fact, the linear regression we've been using this whole time is just a specific case of GLM that uses a specific "link" function. 
 
+The "generalised" part of GLMs relates to the notion of this "link" function. The link function is basically just a way of mapping the linear predictions onto an outcome variable of a specific distribution. The most obvious example is the link function of a linear model is the "identity" link, which basically just pulls through the linear predictors onto the outcome variable i.e. $\mu_Y = X\beta'$ *(hopefully that looks familiar)*.
 
+There are many link functions available such as the Gamma, Poisson or log. However, we will look at two specific examples that are quite common in econometrics *(the later is much more common in broader data science scenarios as well)*. Specifically, two link functions that connect linear predictions to the case of binary data i.e. $Y \in 0,1$, Probit and Logistic Regressions. 
 
 ## Probit
 
+The Probit GLM is a linear model that uses the cumulative standard normal distribution as it's link function, $\Phi(X)$. This turns the linear predictors into a prediction on a binary outcome. The Probit actual stands for "**Prob**ability Un**it**" *(just a fun fact for ya)*. To fit a set of parameters we can maximise the log-likelihood function *(see optimisation notebook for more)*. We can define our *(joint)* probability function as:
+
+$$
+\text{Pr}(Y | X) = \prod_{i=1}^n [\Phi(X' \beta)]^{Y} [1 - \Phi(X' \beta)]^{1-Y}
+$$
+
+Now if we take the log of the above, we get Log-Likelihood function:
+$$
+LL(\beta) = \sum_{i=1}^n \left[ Y \ln \Phi(X' \beta) + (1-Y) \ln (1 - \Phi(X' \beta)) \right]
+$$
+
+The solution to the maximisation *(or minimisation of the negative log-likelihood function)* will provide us the the probit estimates for $\beta$. As will become clear shortly, this vector has a slightly different interpretation to a vector from a typical linear regression. But firstly, let's explore other GLM that handles binary outcome variables, the logistic regression.
 
 ## Logistic Regression
 
+For the Logistic model, we use the logistic cumulative distribution function $\Lambda(X) = \frac{e^{X'\beta}}{1+e^{X'\beta}}$, as the link function *(this is also known as a sigmoid function)*. We can define our *(joint)* probability function as:
 
+$$
+\text{Pr}(Y | X) = \prod_{i=1}^n [\Lambda(X' \beta)]^{Y} [1 - \Lambda(X' \beta)]^{1-Y}
+$$
+
+Now, again, if we take the log we get Log-Likelihood:
+
+$$
+LL(\beta) = \sum_{i=1}^n \left[ Y \ln \Lambda(X' \beta) + (1-Y) \ln (1 - \Lambda(X' \beta)) \right]
+$$
+
+Similarly, the solution of the maximisation problem provides use the estimates for $\beta$. However, as mentioned above, we cannot easily interpret the estimated  $\beta$'s for these two models. For that, we need to determine the *marginal effects* of this model i.e. for a change in $X$, what is the probability change in $Y$? We define the vector of marginal effects as $\frac{\partial E[Y|X]}{\partial X}$, where $E[Y|X]$ is the expected value of the fitted models. 
+
+## Marginal Effects
+### Why are the marginal effects different? 
+
+In a typical linear regression the coefficients themselves represent the *marginal effect* of the covariates. This is because the calculus is very simple:
+
+$$
+E[Y|X] = X'\beta \implies \frac{\partial E[Y|X]}{\partial X} = \beta
+$$
+
+However, because of the link functions in other GLMs, the calculus is not as straightforward thanks to the chain rule. For our purposes, and without getting lost in derivations, we can simply refer to the marginal effects for Probit and Logit as: 
+
+### Probit Marginal Effects
+$$
+\frac{\partial E[Y|X]}{\partial X} = \phi(X' \beta) \beta
+$$
+
+*(Where $\phi$ is the standard normal probability density function)*
+
+### Logit Marginal Effects
+$$
+\frac{\partial E[Y|X]}{\partial X} = \frac{e^{(X' \beta)}}{[1 + e^{(X' \beta)}]^2} \beta = \Lambda(X' \beta)[1 - \Lambda(x' \beta)] \beta
+$$
+
+As you can see, both of the marginal effects are basically the cumulative distribution function of each GLM, multiplied by the estimate coefficient vector $\beta$. So, now the value of the marginal effect depends on the value of $X$ that is chosen. You might wonder what value of $X$ should be chosen? 
+
+A good question, and there are two popular choices available.
+
+### Marginal Effect at the Mean (MEM)
+One popular choice is to evaluate the derivative at the sample mean of the regressors ($\bar{X}$). This involves taking the mean of all elements in $X$ and plugging that into the marginal effect as such:
+
+$$
+\frac{\partial E[Y|\bar{X}]}{\partial X} = f(\bar{X}' \hat \beta) \hat \beta
+$$
+
+This will output a number that can generally be interpreted in a similar manner to the linear regression estimates, with some slight caveats ... 
+
+These numbers will return the marginal effect i.e. probability change in $Y$ from a change in $X$, for a unit that is average in terms of all the elements in $X$.
+
+Now, it's entirely possibly that this doesn't make a lot of sense because this is a "hypothetical" unit. There could be no units in existence that has the identical characteristics for the mean of $X$. This is especially the case when there are binary variables in the regressors, $X$. For example, dummy variables indicating binary characteristics will return a value between 0 and 1. However, it is impossible for an actual unit to be between zero and one, making interpretation of the effects confusing. 
+
+The alternative method sidesteps this problem.
+
+### Average Marginal Effect (AME)
+
+Another popular choice is to calculate the marginal effect for each observation and take the sample mean of those marginal effects:
+
+$$
+E_x \left[ \frac{\partial E[Y|X]}{\partial X} \right] = \frac{1}{n} \sum_{i=1}^n f(X' \hat{\beta}) \hat{\beta}
+$$
+
+Now, the numbers that this produce can be interpreted as the mean value of each units marginal effects. This measures the central tendency of all the marginal effects for each unit in the data. The AME approach benefits from empirically observing the estimated effects for each unit, and not potentially representing a "hypothetical" unit that might not exist. However, the mean assumes the the coefficients is normally distributed which might not be true in reality. 
+
+However, in the example explored in this notebook, I will be estimating the AME when calculating the marginal effects *(mainly because there are a lot of binary variables in this model such that taking the averages of them certainly creates "hypothetical" units)*. 
+
+Okay, now that we've gotten the very basics down for some GLMs, let's explore an example!
+
+## GLM case study: Are Emily and Greg More Employable Than Lakisha and Jamal?
+
+To explore the implementation of GLMs *(specifically probit and logit)*, we will look at a famous "audit" study from 2004 by Marianne Bertrand and Sendhil Mullainathan titled: *"Are Emily and Greg More Employable Than Lakisha and Jamal? A Field Experiment on Labor Market Discrimination"*.
+
+To summarise quickly, this study randomly assigns "White" sounding names like Emily and Greg to half of a set of functionally identical resumes, and then "Black" or "African-American" sounding names like Lakisha and Jamal to the other half the resumes. Some of these resumes were also made to be "higher" or "lower" quality, yet the names remain randomly assigned such that differences in quality across "Black" and "White" sounding names are not observable. 
+
+These resumes where then sent to employment ads in both Boston and Chicago, and the callback rates for each resume were tracked. This allows the researchers to identify if there are disparate callback rates dependent on the name assigned to the resume, and not another factor on the resume. 
+
+Crucially for our purposes in this notebook, the callback rate is a discrete variable. So, we can use a subset of GLMs to model the effects of the randomised name assignment on callback rates. 
+
+For more on the paper, here is a link to an online copy: https://www.povertyactionlab.org/sites/default/files/research-paper/3%20A%20Field%20Experiment%20on%20Labor%20Market%20Discrimination%20Sep%2004.pdf.
+
+I pulled the data from Open ICPSR: https://www.openicpsr.org/openicpsr/project/116023/version/V1/view?path=/openicpsr/116023/fcr:versions/V1/lakisha_aer.dta&type=file
+
+The table below details all the variables we will utilise today *(there are a lot more variables available, but we don't need them for our purposes in this notebook)*: 
+
+| Variable | Description |
+| :--- | :--- |
+| `yearsexp` | Number of years of work experience on the resume |
+| `honors` | Indicator: 1 if resume mentions honors |
+| `volunteer` | Indicator: 1 if resume mentions volunteering experience |
+| `military` | Indicator: 1 if resume mentions military experience |
+| `empholes` | Indicator: 1 if resume mentions employment holes |
+| `workinschool` | Indicator: 1 if resume mentions work experience while at school |
+| `email` | Indicator: 1 if email address is on the resume |
+| `computerskills` | Indicator: 1 if resume mentions computer skills |
+| `specialskills` | Indicator: 1 if resume mentions special skills |
+| `sex` | Sex ('f' = female; 'm' = male) |
+| `race` | Race ('b' = black; 'w' = white) |
+| `h` | Indicator: 1 = high quality resume |
+| `l` | Indicator: 1 = low quality resume |
+| `call` | Indicator: 1 = applicant was called back |
+| `city` | City ('c' = Chicago; 'b' = Boston) |
+| `ad_id` | Employment ad identifier |
+
+Now, with all that out of the way let's code this up!
+
+Firstly, as per usual, we load in the necessary packages and data:
 
 ```{r load packages, message=FALSE}
 rm(list = ls()) 
@@ -81,7 +203,7 @@ library(sandwich) # variance-covariance estimators
 options(scipen = 999) # makes numbers look nicer
 ```
 
-
+We also create some helpful columns for our modeling *(adding constant and creating dummy variables for modeling)*:
 
 ```{r data load}
 
@@ -94,44 +216,62 @@ df[,":=" (city_dummy = fifelse(city == "c", 1, 0),
         )]
 
 cols <- c("white_dummy",
-     "h",
-     'city_dummy',
-     'sex_dummy',
-     'honors',
-     'volunteer',
-     'military', 
-     'email',
-     'empholes',
-     'workinschool', 
-     'computerskills', 
-     'specialskills',
-     'yearsexp')
+          "h",
+          'city_dummy',
+          'sex_dummy',
+          'honors',
+          'volunteer',
+          'military',
+          'email',
+          'empholes',
+          'workinschool',
+          'computerskills',
+          'specialskills',
+          'yearsexp')
 
+# just setting up formula to resuse later
 formula <- as.formula(paste0("call ~ ", paste0(cols, sep = " ", collapse = "+ ")))
 
 print(formula)
 
 ```
 
-
+Firstly, let's recreate some of the key initial findings of the paper, namely the average callback rates by name group:
 
 
 ```{r recreate key stats}
-df[, .(count = .N,
-       mean_callback_rate = round(mean(call),4),
-       sd_callback_rate = round(sd(call),4)),
-       by = .(race)]
-
+knitr::kable(df[, .(count = .N,
+                    mean_callback_rate = round(mean(call),4),
+                    sd_callback_rate = round(sd(call),4)),
+                by = .(race)])
 ```
 
+As, we can see in the table above, the mean callback rate for black sounding names is ~6.5% whilst the mean callback rate for white sounding names is ~ 9.5%, a ~3 percentage point higher callback rate for white sounding names on average. 
+
+That might not seem like a large difference. However, given that the baseline callback rate is ~ 8% a 3 percentage point difference in callback rates is equal to a ~ 38% $(\frac{0.03}{0.08} \approx 0.38)$ difference in callback rates. Indeed, a 3 percentage point higher callback rate for white sounding names is nearly half of the baseline callback rate for Black sounding names.
+
+All this equates to the inference that **"... , these results imply that a White applicant should expect on average one callback for every 10 ads she or he applies to; on the other  hand, an African-American applicant would need to apply to about 15 different ads to achieve the same result"** (pg. 998).
+
+We can also show the benefit white names received in terms of callback rates when considering the "quality" of the resume. This can be easily achieved by grouping by the `hl_dummy` variable as such:
+
 ```{r recreate key stats with quality}
-dcast(df[, .(mean_callback_rate = round(mean(call), 4)),
+knitr::kable(dcast(df[, .(mean_callback_rate = round(mean(call), 4)),
        by = .(race, hl_dummy)],
       race ~ hl_dummy
 ) %>% 
   mutate(delta = high - low)
-
+)
 ```
+
+We see that there is an ~2 percentage point increase in callback rates for white sounding names who have a higher quality resume *(an approx ~25% increase in callback rate)*. There is no similar increase for high quality resumes with a Black sounding name. Thus, there is no benefit from having more skills if you have a Black sounding name. Indeed, just having a white sounding name increases the likelihood of a callback by 2 percentage points relative to both "high" and "low" quality resumes with a Black sounding name.
+
+Now we have replicated the main results of the paper, but say we wanted to account for varaibles that might be confounding these estimates? Well, now is the point we can use GLMs. However, before we get to the GLM modeling, we might want to investigate how well the randomisation process worked when assigning names to resumes. 
+
+Because the names were randomly assigned based on how "African American" or "White" the name sounds, we should expect that all the other variables we observe in $X$ to converge to the same mean value in each group via the LLN and CLT. This means that the only detectable difference between the resumes should be the randomly assigned name *(i.e. Black or white)*. 
+
+We can investigate this by comparing the means of all our covariates in `X` (plus `yearsexp`) between the Black and white sounding names, and calculate a two sample mean group $t$-test for each variable in `X`. This will determine if a statistically significant difference in the means can be detected for each variable. If there is a measurable difference, then we might have reason to control for these differences in our GLM model i.e. add them as a covariate. 
+
+We can do that by using the `t.test` function from `stats` as such:
 
 ```{r t test main}
 
@@ -150,11 +290,16 @@ for (c in cols[-1]){
                             p_value = round(t_res_temp$p.value,4)))
 }
 
-#kableExtra::kable(t_res)
-t_res
+knitr::kable(t_res)
 ```
 
+As we can see from the table above, most variables show no statistically measurable difference except `computerskills`. 
 
+This is really nice evidence that any differences we observe between the two groups can be attributed largely to the difference in assigned names and not any of these other factors i.e. the difference in callback rates can be almost entirely attributed to the assigned names. Now, there does seem to be an issue with a measurable difference in `computerskills` between the two groups resumes, so it might be wise to control for this in our model. 
+
+Now one difference we might expected to observe is between high and low "quality" resumes. For example, a high quality resume is by definition one that might have more education such as an honors degree, might volunteer, maybe they have a special skill or have more years of experience etc. 
+
+We can replicate similar analysis of the means and $t$-tests we did above on "high" and "low" quality resumes as such:
 
 ```{r t test resume quality}
 
@@ -173,9 +318,14 @@ for (c in cols[-2]){
                                     p_value = round(t_res_temp$p.value,4)))
 }
 
-#kableExtra::kable(t_res_quality)
-t_res_quality
+knitr::kable(t_res_quality)
 ```
+
+Now as we can see, most of the covariates show statistically significant differences between high and low "quality" resumes. The crucial exception is for differences between Black and white sounding names which are identical (i.e. no difference). This is generally as expected and also provides evidence that those with higher "quality" resumes should generally expect more callbacks *(independent of the sound of their name)*. 
+
+Now we're ready to test what the difference in call back rates between different "sounding" names and different "quality" of resume are using GLMs.
+
+Firstly, now that we've at the modelling stage, we will just update the dummy variables to factors to help with the marginal effects calcs later. 
 
 ```{r factor}
 # reformat to factor before fitting to model (helps with magrinal effect ccalcs)
@@ -194,6 +344,12 @@ df[,":="(white_dummy = as.factor(white_dummy),
 
 ```
 
+## Probit Regression and Average Marginal effects
+
+Firstly, we will use a probit model to estimate the effect on call back rates depending on the if the resume name sounds White or African America. Our coefficient of interest will be on the `white_dummy` variable.
+
+Handily for us `stats` have a function for `glm` function so we don't have to directly code up the MLE solution ourselves. Instead we can call the `glm(..., link = "probit")` as such *(note I am clustering the standard errors at the ad level as per the paper)*:
+
 
 ```{r probit}
 probit_res <- glm(formula = call ~ white_dummy + h + city_dummy + sex_dummy + honors + 
@@ -203,14 +359,43 @@ probit_res <- glm(formula = call ~ white_dummy + h + city_dummy + sex_dummy + ho
                   data = df)
 
 coeftest(probit_res, vcov. = vcovCL(probit_res, cluster = ~adid))
+```
 
+Now we can see that there is a positive and statistically significant coefficient for the `white_dummy` variables. However, as mentioned above, it is difficult to interpret what the magnitude of these coefficients translates into after going through their link function. 
+
+So, we have to estimate the marginal effects (first partial derivative w.r.t `X`) for each of these coefficients to be able to more easily interpret the results. Luckily for us, the `margins` package has a handy `margins()` function that calculates the marginal effects for a discrete choice model such as Probit. 
+
+For info on marginal effects calcs see: https://www.rdocumentation.org/packages/margins/versions/0.3.28/topics/margins. 
+
+For now, we want to estimate the derivative of each observation whilst accounting the the fact that most of our variables are dummy variables *(hence updating the dummy variables to factors earlier)*:
+
+```{r probit ame}
 ame_probit <- margins(probit_res, 
                       #vce = c("bootstrap"), 
                       vcov = vcovCL(probit_res, cluster = ~adid))
 
-summary(ame_probit)
+knitr::kable(summary(ame_probit))
+
+# there is also a neat plot function that shows you the me with confidence intervals
+plot(ame_probit)
+
 ```
 
+Okay, now the average marginal effect for `white_dummy` is $0.03$. In words, that means that the average resume with a "white" sounding name receives 3% higher call back rates, cetirus paribus. 
+
+Okay, great, but what does that mean in context. Well, similar to the result we've replicated above, if we consider that the baseline callback rate for job applications was ~ $8\%$ for all resumes *(black and white sounding names together)*; a 3% increase in the likelihood of receiving a callback for having a white sounding name actually equates to an ~ 38% relative increase in callback rate.
+
+This is quite a large effect and matches the estimate from the means table above quite nicely. Indeed, it is also nearly 50% of the likelihood of receiving a callback if the resume has a black sounding name (6%).
+
+This might seem redundant to model this when the mean estimates above show the exact same result as the much simpler mean calculations above. However, we did identify that there is a detectable difference in the `computerskills` covariate. This model is controlling for this covariate when the coefficients are estimated, limiting any potential omitted variable bias this measurable difference could add to the estimates 
+
+Therefore, the fact that both the mean and probit results line up quite nicely is encouraging. Supporting the conclusion that this effect is close to the population parameter and unbiased by the differences in the `computerskills` covariate.
+
+## Logistic Regression and Average Marginal effects
+
+Okay, now that we've had a look at how to estimate the Probit model, let's do the same with a logistic regression. 
+
+In terms of coding this up it's functionally identical, however instead of the `glm(..., link = "probit")` function, we will use `glm(..., link = "logit")` as such: 
 
 ```{r logit}
 logit_res <- glm(formula = call ~ white_dummy + h + city_dummy + sex_dummy + honors + 
@@ -221,16 +406,28 @@ logit_res <- glm(formula = call ~ white_dummy + h + city_dummy + sex_dummy + hon
 
 # cluster at ad id level
 coeftest(logit_res, vcov. = vcovCL(logit_res, cluster = ~adid))
+```
+
+We can see that the coefficients now look a bit different than the Probit results. However, again, we can't easily interpret these without finding the marginal effects. Again we can use the `margins()` function to estimate these from the logistics model as such:
+
+```{r logit ame}
 
 ame_logit <- margins(logit_res, 
                      # vce = c("bootstrap"), 
                       vcov = vcovCL(logit_res, cluster = ~adid))
 
-summary(ame_logit)
+knitr::kable(summary(ame_logit))
+
+plot(ame_logit)
 ```
 
+As we can see, now the marginal effects are very similar to the Probit effects. This means we can an overall similar relative increase in callbacks for white sounding names of ~38%.
 
+So, after a third set of estimates, we come to a similar result. This is quite encouraging that the result is robust. 
 
+However, the solid thing about this research isn't the modelling. It is the research design that used randomisation to isolate the effect of culturally latent information in names when it comes to peoples perceptions of race. 
 
+This allows the researchers to isolate a large sample size to estimate an effect of the racialised dimensions of the united states labour market. The models are just a tool that can be used to remain rigorous in your measurements.
 
+And, now you should be able to apply a similar use of GLMs in other research designs!
 
